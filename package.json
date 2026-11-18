@@ -1,0 +1,9 @@
+{
+  "name": "app-llamadas-vinoliva",
+  "private": true,
+  "type": "module",
+  "description": "Solo sirve para que `node --test` entienda los módulos. No hay que instalar nada.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
