@@ -83,8 +83,13 @@ async function registrarSW() {
         if (nuevo.state === 'installed' && navigator.serviceWorker.controller) avisoVersionNueva(reg);
       });
     });
+    // La primera vez que se abre la app no había service worker: al instalarse
+    // toma el control, pero NO hay que recargar (cortaría la bienvenida o la
+    // importación). Solo se recarga al pasar a una versión nueva.
+    let habiaControlador = !!navigator.serviceWorker.controller;
     let recargando = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!habiaControlador) { habiaControlador = true; return; }
       if (recargando) return;
       recargando = true;
       location.reload(); // al recargar, datos.iniciar() ejecuta las migraciones

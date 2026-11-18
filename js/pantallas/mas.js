@@ -184,8 +184,8 @@ export async function flujoImportarClientes(ctx, alTerminar) {
               try {
                 await datos.importarClientes(plan);
                 toast(`Importados: ${r.nuevos} nuevos, ${r.actualizados} actualizados`);
+                resolver(true); // antes de cerrar(): cerrar() llama a alCerrar, que resolvería «false»
                 cerrar();
-                resolver(true);
                 alTerminar?.();
                 ctx.refrescar();
               } catch (e) {
@@ -223,8 +223,9 @@ export function bienvenida(ctx, alTerminar) {
           class: 'btn btn-principal btn-ancho',
           onClick: async () => {
             if (!await guardarNombre()) return;
-            const ok = await flujoImportarClientes(ctx);
-            if (ok) { pc.cerrar(); alTerminar(); }
+            await flujoImportarClientes(ctx);
+            // Si ya hay clientes guardados, la bienvenida ha terminado
+            if (datos.obtenerClientes().length) { pc.cerrar(); alTerminar(); }
           },
         }, 'Importar clientes desde Excel'),
         h('button', {
