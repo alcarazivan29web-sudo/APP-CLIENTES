@@ -352,6 +352,23 @@ export async function borrarRecordatorio(id) {
 }
 
 // ---------------------------------------------------------------------
+//  Promociones
+// ---------------------------------------------------------------------
+
+export function obtenerPromociones() {
+  const out = [];
+  for (const p of cache.promociones.values()) if (!p.borrado) out.push(p);
+  return out;
+}
+
+/** Cada importación SUSTITUYE a las promociones anteriores (que se marcan como borradas). */
+export async function reemplazarPromociones(nuevas) {
+  const marca = ahora();
+  const viejas = obtenerPromociones().map((p) => ({ ...p, borrado: true, fechaBorrado: marca }));
+  return guardar('promociones', [...viejas, ...nuevas], { origen: 'importacion' });
+}
+
+// ---------------------------------------------------------------------
 //  Ajustes
 // ---------------------------------------------------------------------
 
@@ -380,6 +397,26 @@ export async function guardarAjustes(parcial) {
 
 export async function obtenerCambios() {
   return (await leerTodo('cambios')).sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+}
+
+/** Marca cambios como enviados a la oficina (o lo deshace con enviado=false). */
+export async function marcarCambiosEnviados(ids, enviado = true) {
+  if (!ids.length) return 0;
+  const tx = db.transaction('cambios', 'readwrite');
+  const st = tx.objectStore('cambios');
+  const marca = ahora();
+  let n = 0;
+  for (const id of ids) {
+    const req = st.get(id);
+    req.onsuccess = () => {
+      const x = req.result;
+      if (!x) return;
+      st.put({ ...x, enviado, fechaEnviado: enviado ? marca : null });
+      n++;
+    };
+  }
+  await terminar(tx);
+  return n;
 }
 
 // ---------------------------------------------------------------------

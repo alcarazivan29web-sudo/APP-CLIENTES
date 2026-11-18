@@ -5,7 +5,7 @@
 //  IndexedDB y no se tocan al actualizar.
 // =====================================================================
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const CACHE = 'llamadas-vinoliva-' + VERSION;
 
 const ARCHIVOS = [
@@ -18,6 +18,7 @@ const ARCHIVOS = [
   'js/datos.js',
   'js/exportar.js',
   'js/importar.js',
+  'js/informes.js',
   'js/logica.js',
   'js/migraciones.js',
   'js/reloj.js',
@@ -28,6 +29,7 @@ const ARCHIVOS = [
   'js/pantallas/clientes.js',
   'js/pantallas/ficha.js',
   'js/pantallas/mas.js',
+  'js/pantallas/oficina.js',
   'lib/xlsx.full.min.js',
   'icons/icono-192.png',
   'icons/icono-512.png',

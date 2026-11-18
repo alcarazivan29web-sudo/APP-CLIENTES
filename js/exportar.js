@@ -4,6 +4,9 @@
 
 import * as datos from './datos.js';
 import { DIAS_EXCEL, NOMBRE_ESTADO, fechaNormal } from './logica.js';
+import {
+  hojasExcelSemanal, nombreExcelSemanal, filasHistorial, nombreArchivoComercial, COLUMNAS_COMUNES,
+} from './informes.js';
 import { compartirArchivo } from './ui.js';
 
 const TIPO_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -27,12 +30,48 @@ export function filasExportacionClientes(clientes) {
 }
 
 function libroExcel(nombreHoja, filas, anchos) {
+  return libroVariasHojas({ [nombreHoja]: filas }, { [nombreHoja]: anchos });
+}
+
+/** hojas: { nombre: [cabecera, ...filas] }. Anchos automáticos si no se dan. */
+function libroVariasHojas(hojas, anchos = {}) {
   const XLSX = globalThis.XLSX;
-  const hoja = XLSX.utils.aoa_to_sheet(filas);
-  if (anchos) hoja['!cols'] = anchos.map((w) => ({ wch: w }));
+  if (!XLSX) throw new Error('No se ha cargado la librería de Excel.');
   const libro = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(libro, hoja, nombreHoja);
+  for (const [nombre, filas] of Object.entries(hojas)) {
+    const hoja = XLSX.utils.aoa_to_sheet(filas);
+    const w = anchos[nombre] || (filas[0] || []).map((_, i) =>
+      Math.min(50, Math.max(8, ...filas.slice(0, 200).map((f) => String(f[i] ?? '').length + 2))));
+    hoja['!cols'] = w.map((x) => ({ wch: x }));
+    if (filas.length) hoja['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: (filas[0] || []).length - 1 } }) };
+    XLSX.utils.book_append_sheet(libro, hoja, nombre);
+  }
   return new Blob([XLSX.write(libro, { bookType: 'xlsx', type: 'array' })], { type: TIPO_XLSX });
+}
+
+/** Excel de la semana para la oficina (formato fijo, una hoja por tipo de dato). */
+export async function exportarExcelSemanal(datosDeLaSemana, comercial) {
+  const blob = libroVariasHojas(hojasExcelSemanal(datosDeLaSemana, comercial));
+  return compartirArchivo(blob, nombreExcelSemanal(datosDeLaSemana.lunes, comercial), 'Excel de la semana');
+}
+
+/** Todo el historial de llamadas y pedidos desde el primer día. */
+export async function exportarHistorial(fecha) {
+  const comercial = datos.obtenerAjustes().nombreComercial;
+  const filas = filasHistorial({ llamadas: datos.obtenerLlamadas(), clientes: datos.obtenerClientes({ incluirBorrados: true }), comercial });
+  const blob = libroVariasHojas({ Historial: filas });
+  return compartirArchivo(blob, `historial_${fecha}_${nombreArchivoComercial(comercial)}.xlsx`, 'Historial');
+}
+
+/** Cambios para ICG en Excel. */
+export async function exportarCambiosICG(filasICG, fecha) {
+  const comercial = datos.obtenerAjustes().nombreComercial || 'Comercial';
+  const filas = [
+    [...COLUMNAS_COMUNES.filter((c) => c !== 'Semana'), 'Fecha del cambio', 'Campo', 'Antes', 'Después', '¿Cliente nuevo?'],
+    ...filasICG.map((x) => [comercial, x.codigo, x.cliente, x.fecha, x.campo, x.antes, x.despues, x.tipo === 'nuevo' ? 'Sí' : '']),
+  ];
+  const blob = libroVariasHojas({ 'Cambios ICG': filas });
+  return compartirArchivo(blob, `cambios_icg_${fecha}_${nombreArchivoComercial(comercial)}.xlsx`, 'Cambios para ICG');
 }
 
 export async function exportarClientesExcel(fecha) {

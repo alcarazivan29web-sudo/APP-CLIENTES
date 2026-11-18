@@ -288,6 +288,13 @@ export function recordatorioVacio() {
   return { clienteId: null, fecha: null, texto: '', hecho: false, fechaHecho: null, borrado: false, fechaBorrado: null };
 }
 
+export function promocionVacia() {
+  return {
+    producto: '', detalle: '', precio: null, promocion: '', desde: null, hasta: null, tipo: '',
+    fechaImportacion: null, borrado: false, fechaBorrado: null,
+  };
+}
+
 /** Cómo llegó un pedido. «llamada» es la llamada normal de su día. */
 export const ORIGENES_PEDIDO = { cliente_llama: 'Llamó el cliente', whatsapp: 'Por WhatsApp', visita: 'En visita' };
 
@@ -298,7 +305,7 @@ export function ajustesVacios() {
   return {
     id: 'ajustes', nombreComercial: '', whatsappOficina: '', contactoIvan: '',
     plantillas: { noContesta: PLANTILLA_NO_CONTESTA },
-    semanasRiesgo: 3, primerUso: null, ultimaCopia: null, ultimoResumen: null,
+    semanasRiesgo: 3, primerUso: null, ultimaCopia: null, ultimoResumen: null, resumenesEnviados: [],
     avisoSemanaPasadaCerrado: null,
   };
 }
@@ -704,7 +711,7 @@ export function calcularSemana({ clientes, llamadas, lunes, fecha, primerUso = n
   const viernes = sumarDias(lunes, 4);
   const dias = [1, 2, 3, 4, 5].map((n) => ({
     dia: n, fecha: fechaDeDia(lunes, n), items: [],
-    cuentas: { clientes: 0, llamados: 0, pide: 0, noPide: 0, noContesta: 0, pendientes: 0 },
+    cuentas: { clientes: 0, llamados: 0, pide: 0, noPide: 0, noContesta: 0, pendientes: 0, porLlamar: 0 },
   }));
 
   for (const c of clientes) {
@@ -741,9 +748,10 @@ export function calcularSemana({ clientes, llamadas, lunes, fecha, primerUso = n
       if (it.situacion === 'no_pide') k.noPide++;
       if (it.situacion === 'no_contesta') k.noContesta++;
       if (it.situacion === 'pendiente') k.pendientes++;
+      if (it.situacion === 'por_llamar' || it.situacion === 'mas_tarde') k.porLlamar++;
     }
   }
-  const total = { clientes: 0, llamados: 0, pide: 0, noPide: 0, noContesta: 0, pendientes: 0 };
+  const total = { clientes: 0, llamados: 0, pide: 0, noPide: 0, noContesta: 0, pendientes: 0, porLlamar: 0 };
   for (const d of dias) for (const k of Object.keys(total)) total[k] += d.cuentas[k];
   return { lunes, dias, total };
 }
@@ -787,6 +795,55 @@ export function rellenarPlantilla(plantilla, { cliente, comercial, fecha }) {
 export function enlaceWhatsApp(telefono, texto = '') {
   const num = telefonoWhatsApp(telefono);
   return `https://wa.me/${num}${texto ? '?text=' + encodeURIComponent(texto) : ''}`;
+}
+
+// ---------------------------------------------------------------------
+//  Promociones
+// ---------------------------------------------------------------------
+
+/** Fecha de una celda de Excel → 'YYYY-MM-DD' (o null).
+ *  Acepta fechas de Excel, 'YYYY-MM-DD' y 'DD/MM/AAAA' (orden español). */
+export function analizarFecha(v) {
+  if (v == null || v === '') return null;
+  if (v instanceof Date || Object.prototype.toString.call(v) === '[object Date]') {
+    if (isNaN(v)) return null;
+    // +12 h: las fechas de Excel a medianoche pueden llegar una hora antes por la zona horaria
+    return fechaLocal(new Date(v.getTime() + 12 * 3600 * 1000));
+  }
+  if (typeof v === 'number' && v > 20000 && v < 80000) {
+    // Número de serie de Excel (días desde el 30/12/1899)
+    const d = new Date(1899, 11, 30 + Math.floor(v), 12);
+    return fechaLocal(d);
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) {
+    const f = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+    return esFechaValida(f) ? f : null;
+  }
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/);
+  if (m) {
+    const anio = m[3].length === 2 ? '20' + m[3] : m[3];
+    const f = `${anio}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    return esFechaValida(f) ? f : null;
+  }
+  return null;
+}
+
+/** Promociones que se enseñan hoy: no caducadas (las de «Hasta» pasado se ocultan solas).
+ *  Primero las que ya están en marcha; después las que empiezan más adelante. */
+export function promocionesVigentes(promos, fecha) {
+  return promos
+    .filter((p) => !p.borrado && (!p.hasta || p.hasta >= fecha))
+    .map((p) => ({ ...p, empezada: !p.desde || p.desde <= fecha }))
+    .sort((a, b) => (b.empezada - a.empezada) || compararTexto(a.tipo, b.tipo) || compararTexto(a.producto, b.producto));
+}
+
+export function coincidePromo(p, consulta) {
+  const q = normalizarTexto(consulta);
+  if (!q) return true;
+  const t = normalizarTexto([p.producto, p.detalle, p.promocion, p.tipo].join(' '));
+  return q.split(' ').every((x) => t.includes(x));
 }
 
 // ---------------------------------------------------------------------

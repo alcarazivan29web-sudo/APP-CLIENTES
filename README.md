@@ -6,7 +6,7 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - Los datos se guardan **solo en el móvil**. No hay servidor ni nube.
 - **Los datos de clientes nunca están en el código ni se suben a GitHub.** Se cargan en el móvil con el botón «Importar».
 
-**Estado:** fases 1 (Llamadas) y 2 (Seguimiento) terminadas. La fase 3 (Oficina) va después.
+**Estado:** las tres fases terminadas: 1 (Llamadas), 2 (Seguimiento) y 3 (Oficina). Versión 1.2.0.
 
 **Qué hace la fase 2:**
 - **Registrar pedido** (ficha o menú ⋯): pedidos que llegan fuera de su día (llamó el cliente, WhatsApp o visita). Ese cliente ya no sale para llamar el resto de la semana.
@@ -14,6 +14,13 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - **Clientes en riesgo:** la etiqueta «X semanas sin pedir» (3 por defecto, se cambia en Ajustes). No marca a nadie hasta que la app lleve ese tiempo en uso. Solo cuenta clientes activos con día de llamada.
 - **Ficha:** ★ importante, pide habitualmente, condiciones y cobro pendiente. Filtros «En riesgo» y «Cobro pendiente» en Clientes.
 - **Potenciales:** con el + de Clientes, eligiendo «Potencial». Si tienen día, salen en el bloque **Captación** de Hoy. Si piden, la app pregunta «¿Pasar a cliente?».
+
+**Qué hace la fase 3:**
+- **Resumen semanal para Iván:** desde el viernes a las 12:00 sale en Hoy el aviso «Enviar resumen de la semana a Iván». El lunes sigue saliendo si no se envió el viernes. Se abre también desde **Más → Resumen semanal**, donde se pueden ver semanas anteriores. Lleva llamadas por día, pedidos, quién se quedó sin llamar, clientes en riesgo, bajas, vacaciones, clientes y potenciales nuevos, recordatorios sin hacer y cambios para ICG. Se envía por WhatsApp o por correo, según lo que haya en Ajustes.
+- **Excel de la semana:** botón «Enviar Excel de la semana» en el resumen. Se llama `semana_AAAA-MM-DD_Nombre.xlsx` y tiene siempre las mismas hojas: Resumen, Llamadas, Pedidos, Clientes, Cambios ICG y Recordatorios. Todas empiezan por las columnas Comercial · Semana · Código · Cliente, para poder juntar los Excel de varios comerciales. La hoja Clientes **no lleva teléfonos**.
+- **Cambios para ICG** (Más): los datos de clientes que el comercial ha cambiado en la app (teléfono, contacto, forma de pago…), con el antes y el después, para actualizarlos en ICG. Se exportan a Excel. Al enviar el resumen se marcan solos como enviados, con la opción de deshacer.
+- **Promociones:** botón **Promos** en Hoy, con buscador. Se cargan desde **Más → Importar promociones (Excel)**. Cada importación sustituye a las anteriores. Las caducadas no se ven y las que aún no han empezado salen al final, más claras.
+- **Exportar historial** (Más): todas las llamadas y pedidos en un Excel.
 
 ---
 
@@ -94,7 +101,7 @@ Funciona sin conexión. Solo hace falta internet para enviar WhatsApps.
 
 ---
 
-## 4. Importar los clientes (y, en la fase 3, las promociones) desde el móvil
+## 4. Importar los clientes y las promociones desde el móvil
 
 1. Desde tu ordenador, mándale el Excel (`Clientes_Bonilla_para_app.xlsx`) por **WhatsApp** o por **correo**.
 2. En su móvil, que **abra o descargue** el archivo desde WhatsApp. Así queda guardado en el móvil, normalmente en la carpeta *Descargas* o *Documentos → WhatsApp*.
@@ -113,6 +120,14 @@ Funciona sin conexión. Solo hace falta internet para enviar WhatsApps.
 
 **Antes de importar:** corrige en el Excel la fila **C001** («JOSE PARSIFAL»), que tiene 11 teléfonos y un teléfono en «Población», y la **C004**, que tiene un email en «Población».
 
+### Promociones
+
+1. Rellena la plantilla `Promociones_semana_plantilla.xlsx` (hoja **Promociones**). Columnas: Producto, Detalle, Precio (€), Promoción, Desde, Hasta y Tipo. Solo «Producto» es obligatoria.
+2. Las filas cuyo producto empiece por **EJEMPLO** se ignoran: puedes dejarlas como guía.
+3. Mándale el Excel por WhatsApp o correo y que lo abra o descargue en el móvil.
+4. En la app: **Más → Importar promociones (Excel)**. Verá cuántas hay, cuántas son de ejemplo y cuántas ya han caducado. Pulsa **Importar**.
+5. **Sustituyen a las anteriores**: manda siempre el Excel completo con todas las promociones vigentes.
+
 ---
 
 ## 5. Configurar los números de la oficina y el tuyo
@@ -121,7 +136,7 @@ En la app: **Más → Ajustes**.
 
 - **Tu nombre:** el del comercial, por ejemplo «Juan Bonilla». Sale al final de cada pedido.
 - **WhatsApp de la oficina:** el número al que llegan los pedidos. Si se deja vacío, al enviar un pedido se abre el menú de compartir para elegir a quién.
-- **WhatsApp o correo de Iván:** para el resumen semanal (fase 3).
+- **WhatsApp o correo de Iván:** para el resumen semanal. Si es un número, se envía por WhatsApp. Si es un correo, se abre el correo con el texto ya escrito. Si se deja vacío, se abre el menú de compartir.
 - **Mensaje cuando no contesta:** se puede cambiar. Usa `{contacto}`, `{nombre}`, `{comercial}` y `{dia}`.
 
 Pulsa **Guardar ajustes**.
@@ -147,8 +162,8 @@ Los datos están en el móvil (IndexedDB), **no** en los archivos de la app. Act
 
 1. Haz los cambios en los archivos.
 2. Sube el número de versión en **dos sitios** (el mismo número en los dos):
-   - `js/version.js` → `export const VERSION = '1.0.1';`
-   - `sw.js` → `const VERSION = '1.0.1';`
+   - `js/version.js` → `export const VERSION = '1.2.0';`
+   - `sw.js` → `const VERSION = '1.2.0';`
 3. Si has añadido un archivo nuevo de la app, añádelo también a la lista `ARCHIVOS` de `sw.js`.
 4. Pasa los tests: `node --test`.
 5. En GitHub Desktop: comprueba que en **Changes** no hay datos de clientes, escribe un resumen, pulsa **Commit to main** y luego **Push origin**.
@@ -178,7 +193,8 @@ Las pantallas no tendrían que cambiar. Con eso vendrían las cuentas de usuario
 ## Posibles mejoras (fuera de esta versión)
 
 - Sincronización real con la nube, cuentas de usuario y panel para la oficina.
-- Varios comerciales.
+- Varios comerciales: los Excel semanales ya llevan el nombre del comercial y el mismo formato, para poder juntarlos.
+- WhatsApp automático cuando el cliente no contesta (necesitaría la API de WhatsApp Business y un servidor).
 - Ordenar los clientes a mano para seguir el orden de la ruta.
 - Convertirla en un archivo APK (por ejemplo, con Capacitor).
 - Notificaciones push.
@@ -191,9 +207,10 @@ Las pantallas no tendrían que cambiar. Con eso vendrían las cuentas de usuario
 |---|---|
 | `index.html`, `css/estilos.css` | La página y los estilos |
 | `js/app.js` | Arranque, pestañas y aviso de versión nueva |
-| `js/pantallas/` | Una pantalla por archivo: `hoy`, `semana`, `clientes`, `ficha` y `mas` |
+| `js/pantallas/` | Una pantalla por archivo: `hoy`, `semana`, `clientes`, `ficha`, `mas` y `oficina` (resumen, ICG y promociones) |
 | `js/acciones.js` | Llamar, WhatsApp, panel del resultado, más tarde, vacaciones, baja… |
 | `js/logica.js` | Funciones puras: fechas, lista del día, orden, textos y mensajes |
+| `js/informes.js` | Funciones puras: resumen semanal, Excel de la semana, cambios ICG e historial |
 | `js/datos.js` | **El único** que habla con la base de datos del móvil |
 | `js/migraciones.js` | Versión de los datos, migraciones y formato de la copia |
 | `js/importar.js`, `js/exportar.js` | Excel de entrada y de salida, y copia de seguridad |
@@ -204,4 +221,4 @@ Las pantallas no tendrían que cambiar. Con eso vendrían las cuentas de usuario
 | `tests/` | Pruebas automáticas (`node --test`) |
 | `datos-privados/` | Tus Excel. **No se sube nunca** |
 
-**Peticiones a internet:** ninguna mientras se usa la app. Las únicas salidas son los enlaces que abre el propio comercial: `tel:` para llamar y `https://wa.me/…` para WhatsApp.
+**Peticiones a internet:** ninguna mientras se usa la app. Las únicas salidas son los enlaces que abre el propio comercial: `tel:` para llamar, `https://wa.me/…` para WhatsApp y `mailto:` para mandar el resumen por correo.

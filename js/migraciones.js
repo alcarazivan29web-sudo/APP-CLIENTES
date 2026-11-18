@@ -10,7 +10,7 @@
 //    3. Añade un test en tests/migraciones.test.js.
 // =====================================================================
 
-import { clienteVacio, registroVacio, ajustesVacios, recordatorioVacio } from './logica.js';
+import { clienteVacio, registroVacio, ajustesVacios, recordatorioVacio, promocionVacia } from './logica.js';
 
 export const ESQUEMA_ACTUAL = 1;
 export const FORMATO_COPIA = 'llamadas-vinoliva';
@@ -26,6 +26,7 @@ function rellenar(base, obj) {
 export const completarCliente = (c) => rellenar(clienteVacio(), c);
 export const completarRegistro = (r) => rellenar(registroVacio(), r);
 export const completarRecordatorio = (r) => rellenar(recordatorioVacio(), r);
+export const completarPromocion = (p) => rellenar(promocionVacia(), p);
 export const completarAjustes = (a) => {
   const base = ajustesVacios();
   return { ...rellenar(base, a), plantillas: { ...base.plantillas, ...(a.plantillas || {}) } };
@@ -38,6 +39,7 @@ export const MIGRACIONES = {
     clientes: d.clientes.map(completarCliente),
     llamadas: d.llamadas.map(completarRegistro),
     recordatorios: d.recordatorios.map(completarRecordatorio),
+    promociones: d.promociones.map(completarPromocion),
     ajustes: d.ajustes.length ? d.ajustes.map(completarAjustes) : [],
   }),
 };

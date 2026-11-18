@@ -5,7 +5,7 @@
 // =====================================================================
 
 import {
-  normalizarTexto, analizarDias, analizarHora, extraerTelefonos, clienteVacio,
+  normalizarTexto, analizarDias, analizarHora, extraerTelefonos, clienteVacio, analizarFecha, promocionVacia,
 } from './logica.js';
 
 /** Columnas conocidas del Excel → campo de la app. Las demás se ignoran. */
@@ -178,11 +178,70 @@ export function planificarImportacion(delArchivo, existentes, { fecha, archivo =
 }
 
 // ---------------------------------------------------------------------
+//  Promociones
+// ---------------------------------------------------------------------
+
+export const COLUMNAS_PROMOS = {
+  producto: ['PRODUCTO', 'ARTICULO', 'VINO'],
+  detalle: ['DETALLE', 'DESCRIPCION'],
+  precio: ['PRECIO (€)', 'PRECIO', 'PRECIO €', 'PVP'],
+  promocion: ['PROMOCION', 'OFERTA', 'DESCUENTO'],
+  desde: ['DESDE', 'INICIO', 'FECHA INICIO'],
+  hasta: ['HASTA', 'FIN', 'FECHA FIN'],
+  tipo: ['TIPO', 'CATEGORIA'],
+};
+
+/** '6,95 €' / 6.95 / '1.200,50' → número (o null). */
+export function analizarPrecio(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  let s = String(v).replace(/[€\s]/g, '');
+  if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+  else s = s.replace(/,/g, '');
+  const n = Number(s);
+  return s && isFinite(n) ? n : null;
+}
+
+/** Filas de la hoja «Promociones» → { promociones, avisos, ignoradas }.
+ *  Se ignoran las filas vacías y las que empiezan por «EJEMPLO». */
+export function filasAPromociones(filas, { fecha = null } = {}) {
+  const avisos = [];
+  if (!filas || !filas.length) return { promociones: [], avisos: ['El archivo está vacío.'], ejemplos: 0 };
+  let iCab = filas.findIndex((f) => (f || []).some((c) => normalizarTexto(c) === 'PRODUCTO'));
+  if (iCab < 0) return { promociones: [], avisos: ['No encuentro la columna «Producto».'], ejemplos: 0 };
+  const mapa = {};
+  filas[iCab].forEach((h, i) => {
+    const n = normalizarTexto(h);
+    const campo = Object.keys(COLUMNAS_PROMOS).find((k) => COLUMNAS_PROMOS[k].map(normalizarTexto).includes(n));
+    if (campo && mapa[campo] === undefined) mapa[campo] = i;
+  });
+  const col = (f, k) => (mapa[k] === undefined ? '' : f[mapa[k]]);
+  const promociones = [];
+  let ejemplos = 0;
+  for (let i = iCab + 1; i < filas.length; i++) {
+    const f = filas[i] || [];
+    const producto = texto(col(f, 'producto'));
+    if (!producto) { if (f.some((v) => texto(v))) avisos.push(`Fila ${i + 1}: sin producto, no se importa.`); continue; }
+    if (/^EJEMPLO/i.test(producto)) { ejemplos++; continue; }
+    const p = { ...promocionVacia(), producto, detalle: texto(col(f, 'detalle')), promocion: texto(col(f, 'promocion')),
+      tipo: texto(col(f, 'tipo')), precio: analizarPrecio(col(f, 'precio')), fechaImportacion: fecha };
+    for (const k of ['desde', 'hasta']) {
+      const v = col(f, k);
+      p[k] = analizarFecha(v);
+      if (texto(v) && !p[k] && !(v instanceof Date)) avisos.push(`Fila ${i + 1} (${producto}): no entiendo la fecha «${texto(v)}» de «${k}».`);
+    }
+    if (texto(col(f, 'precio')) && p.precio == null) avisos.push(`Fila ${i + 1} (${producto}): no entiendo el precio «${texto(col(f, 'precio'))}».`);
+    promociones.push(p);
+  }
+  return { promociones, avisos, ejemplos };
+}
+
+// ---------------------------------------------------------------------
 //  Navegador: leer el archivo con SheetJS
 // ---------------------------------------------------------------------
 
 /** Lee un .xlsx/.xls/.csv y devuelve las filas de la hoja indicada (o la primera). */
-export async function leerArchivo(file, hojaPreferida) {
+export async function leerArchivo(file, hojaPreferida, { crudo = false } = {}) {
   const XLSX = globalThis.XLSX;
   if (!XLSX) throw new Error('No se ha cargado la librería de Excel.');
   const esTexto = /\.(csv|txt)$/i.test(file.name);
@@ -191,5 +250,6 @@ export async function leerArchivo(file, hojaPreferida) {
     : XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
   const nombre = wb.SheetNames.find((n) => normalizarTexto(n) === normalizarTexto(hojaPreferida)) || wb.SheetNames[0];
   const hoja = wb.Sheets[nombre];
-  return XLSX.utils.sheet_to_json(hoja, { header: 1, raw: false, defval: '', dateNF: 'yyyy-mm-dd' });
+  // crudo: números y fechas como valores (para promociones); si no, como texto
+  return XLSX.utils.sheet_to_json(hoja, { header: 1, raw: crudo && !esTexto, defval: '', dateNF: 'yyyy-mm-dd' });
 }

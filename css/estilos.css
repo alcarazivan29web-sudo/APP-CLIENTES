@@ -393,3 +393,27 @@ body.con-banda .pc-cabecera { top: 22px; }
 .chip.est-riesgo { background: var(--rojo-claro); color: var(--rojo); }
 .chip.est-cobro { background: #fdecc8; color: #7a4a00; }
 .ficha-estado.est-potencial { background: var(--azul-claro); }
+
+/* ---------- Fase 3 · Oficina ---------- */
+.cabecera-acciones { display: flex; gap: 8px; margin-top: 10px; }
+.cabecera-acciones .btn { flex: 1; }
+.aviso-resumen { background: var(--azul-claro); border-color: var(--azul); }
+
+/* Promociones */
+.lista-promos { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.tarjeta-promo { background: var(--blanco); border: 1px solid var(--borde); border-left: 6px solid var(--dorado); border-radius: var(--radio); padding: 12px 14px; box-shadow: var(--sombra); }
+.tarjeta-promo.futura { opacity: .7; border-left-color: var(--borde); }
+.promo-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.promo-producto { margin: 0; font-size: 19px; color: var(--azul-osc); }
+.promo-oferta { flex: 0 0 auto; background: var(--dorado); color: var(--azul-osc); font-weight: 800; border-radius: 10px; padding: 4px 10px; font-size: 17px; }
+.promo-detalle { margin: 6px 0 4px; color: var(--texto-2); }
+
+/* Resumen semanal */
+.vista-resumen { white-space: pre-wrap; word-break: break-word; background: var(--blanco); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; font-family: inherit; font-size: 15px; line-height: 1.45; }
+
+/* Cambios para ICG */
+.lista-cambios { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.fila-cambio { background: var(--blanco); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 12px; }
+.fila-cambio p { margin: 6px 0 0; }
+.fila-cambio .antes { color: var(--rojo); text-decoration: line-through; }
+.fila-cambio .despues { color: var(--verde); font-weight: 700; }

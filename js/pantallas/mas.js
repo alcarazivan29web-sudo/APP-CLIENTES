@@ -4,7 +4,8 @@
 
 import * as datos from '../datos.js';
 import { filasAClientes, planificarImportacion, leerArchivo } from '../importar.js';
-import { exportarClientesExcel, hacerCopiaSeguridad } from '../exportar.js';
+import { exportarClientesExcel, hacerCopiaSeguridad, exportarHistorial } from '../exportar.js';
+import { abrirPromos, flujoImportarPromos, numPromosVigentes, abrirResumen, abrirCambiosICG, contarCambiosICG } from './oficina.js';
 import { leerCopia } from '../migraciones.js';
 import {
   fechaNormal, fechaDeMarca, horaDeMarca, PLANTILLA_NO_CONTESTA, rellenarPlantilla,
@@ -26,6 +27,9 @@ export function render(cont, ctx) {
 
   const ultima = aj.ultimaCopia ? `${fechaNormal(fechaDeMarca(aj.ultimaCopia))} a las ${horaDeMarca(aj.ultimaCopia)}` : 'nunca';
   const persist = h('span', {}, '…');
+  const { fecha } = ctx.reloj.ahoraFH();
+  const numCambios = h('span', {}, 'Cambios para ICG');
+  contarCambiosICG().then((n) => { numCambios.textContent = `Cambios para ICG (${n} ${n === 1 ? 'pendiente' : 'pendientes'})`; }).catch(() => {});
   datos.esPersistente().then((p) => { persist.textContent = p ? 'sí' : 'no (Android podría borrarlos si falta espacio)'; });
 
   cont.replaceChildren(
@@ -36,7 +40,21 @@ export function render(cont, ctx) {
       boton('Exportar clientes a Excel', async () => {
         const r = await exportarClientesExcel(ctx.reloj.ahoraFH().fecha);
         if (r === 'descargado') toast('Excel guardado en Descargas');
+      }),
+      boton('Exportar historial de llamadas y pedidos', async () => {
+        try {
+          const r = await exportarHistorial(ctx.reloj.ahoraFH().fecha);
+          if (r === 'descargado') toast('Excel guardado en Descargas');
+        } catch (e) { toast('No se pudo crear el Excel: ' + e.message, { duracion: 7000 }); }
       })),
+    tarjeta('Para la oficina',
+      h('p', { class: 'texto-ayuda' }, 'El resumen de la semana para Iván (WhatsApp o correo) y el Excel semanal con todo el detalle.'),
+      boton('Resumen semanal', () => abrirResumen(ctx), 'btn-principal'),
+      boton(numCambios, () => abrirCambiosICG(ctx))),
+    tarjeta('Promociones',
+      h('p', { class: 'texto-ayuda' }, `${numPromosVigentes(fecha)} promociones vigentes. Cada importación sustituye a las anteriores; las caducadas se ocultan solas.`),
+      boton('Ver promociones', () => abrirPromos(ctx)),
+      boton('Importar promociones (Excel)', () => flujoImportarPromos(ctx))),
     tarjeta('Recordatorios', ...seccionRecordatorios(ctx)),
     tarjeta('Copia de seguridad',
       h('p', { class: 'texto-ayuda' }, `Última copia: ${ultima}. Guarda todo (clientes, llamadas, pedidos y ajustes) en un archivo. Mándatelo por WhatsApp o correo para no perder nada si se rompe o cambias de móvil.`),

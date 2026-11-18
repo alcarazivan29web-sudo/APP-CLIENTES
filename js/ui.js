@@ -155,9 +155,9 @@ export function pantallaCompleta({ titulo, contenido, acciones = [], alCerrar })
 //  Enlaces externos, compartir y archivos
 // ---------------------------------------------------------------------
 
-/** Abre tel: o WhatsApp. Son las ÚNICAS salidas de la app. */
+/** Abre tel:, mailto: (resumen a Iván) o WhatsApp. Son las ÚNICAS salidas de la app. */
 export function abrirEnlace(url) {
-  if (url.startsWith('tel:')) { window.location.href = url; return; }
+  if (url.startsWith('tel:') || url.startsWith('mailto:')) { window.location.href = url; return; }
   const a = h('a', { href: url, target: '_blank', rel: 'noopener' });
   document.body.append(a);
   a.click();

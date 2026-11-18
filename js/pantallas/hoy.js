@@ -5,6 +5,7 @@
 import * as datos from '../datos.js';
 import * as acciones from '../acciones.js';
 import { exportarYAvisar } from './mas.js';
+import { abrirPromos, numPromosVigentes, abrirResumen, resumenPorEnviar } from './oficina.js';
 import {
   calcularListaDia, calcularSemana, fechaLarga, fechaDeMarca, diasEntre, formatearTelefono,
   sumarDias, lunesDe, DIAS, NOMBRE_SITUACION, analizarCierre, fechaCorta, diaSemana, capitalizarPrimera,
@@ -26,17 +27,18 @@ export function render(cont, ctx) {
   });
 
   const cab = h('header', { class: 'cabecera-hoy' },
-    h('div', { class: 'cabecera-fila' },
-      h('h1', {}, fechaLarga(fecha)),
-      h('button', {
-        class: 'btn btn-secundario btn-peq', 'aria-label': 'Nuevo recordatorio',
-        onClick: () => acciones.editarRecordatorio({ elegirCliente: true }),
-      }, '+ Recordatorio')),
+    h('h1', {}, fechaLarga(fecha)),
     lista.finDeSemana
       ? h('p', { class: 'contador' }, 'Fin de semana')
       : h('p', { class: 'contador' },
         `${lista.contador.porLlamar} por llamar · ${lista.contador.hechos} ${lista.contador.hechos === 1 ? 'hecho' : 'hechos'}` +
         (lista.contador.noContestan ? ` · ${lista.contador.noContestan} no ${lista.contador.noContestan === 1 ? 'contesta' : 'contestan'}` : '')),
+    h('div', { class: 'cabecera-acciones' },
+      h('button', { class: 'btn btn-secundario btn-peq', onClick: () => abrirPromos(ctx) }, `Promos (${numPromosVigentes(fecha)})`),
+      h('button', {
+        class: 'btn btn-secundario btn-peq', 'aria-label': 'Nuevo recordatorio',
+        onClick: () => acciones.editarRecordatorio({ elegirCliente: true }),
+      }, '+ Recordatorio')),
   );
 
   const partes = [cab, ...avisos(ctx, aj, clientes, lista, fecha)];
@@ -76,6 +78,14 @@ export function render(cont, ctx) {
 
 function avisos(ctx, aj, clientes, lista, fecha) {
   const out = [];
+  // Resumen semanal para Iván (desde el viernes a mediodía; el lunes, si no se mandó)
+  const semanaResumen = clientes.length ? resumenPorEnviar(aj, fecha, lista.hora, lista.dia) : null;
+  if (semanaResumen) {
+    const esta = semanaResumen === lista.lunes;
+    out.push(h('div', { class: 'aviso aviso-resumen' },
+      h('p', {}, esta ? 'Enviar resumen de la semana a Iván.' : 'No enviaste el resumen de la semana pasada a Iván.'),
+      h('button', { class: 'btn btn-principal btn-peq', onClick: () => abrirResumen(ctx, semanaResumen) }, 'Ver y enviar')));
+  }
   // Copia de seguridad atrasada
   if (clientes.length) {
     const dias = aj.ultimaCopia ? diasEntre(fechaDeMarca(aj.ultimaCopia), fecha) : null;
