@@ -283,6 +283,14 @@ export function registroVacio() {
   };
 }
 
+/** Recordatorio: clienteId es opcional (puede ser una tarea suelta). */
+export function recordatorioVacio() {
+  return { clienteId: null, fecha: null, texto: '', hecho: false, fechaHecho: null, borrado: false, fechaBorrado: null };
+}
+
+/** Cómo llegó un pedido. «llamada» es la llamada normal de su día. */
+export const ORIGENES_PEDIDO = { cliente_llama: 'Llamó el cliente', whatsapp: 'Por WhatsApp', visita: 'En visita' };
+
 export const PLANTILLA_NO_CONTESTA =
   'Hola {contacto}, te he llamado para el pedido de esta semana, ¿necesitas algo? Un saludo, {comercial} (VinOliva)';
 
@@ -406,12 +414,79 @@ export function resumenNoContesta(r) {
 //  Situación de un cliente en una semana
 // ---------------------------------------------------------------------
 
+/** ¿Le tocaba llamar ese día? Los potenciales también se llaman (bloque Captación). */
 function esElegible(c, f, primerUso) {
   if (primerUso && f < primerUso) return false;
   if (c.diasLlamadaDesde && f < c.diasLlamadaDesde) return false;
   const creado = fechaDeMarca(c.creado);
   if (creado && f < creado) return false;
-  return estadoEnFecha(c, f) === 'activo';
+  const est = estadoEnFecha(c, f);
+  return est === 'activo' || est === 'potencial';
+}
+
+// ---------------------------------------------------------------------
+//  Clientes en riesgo (llevan X semanas sin pedir)
+// ---------------------------------------------------------------------
+
+/** Último día en que cada cliente hizo un pedido: Map clienteId → 'YYYY-MM-DD'. */
+export function ultimosPedidos(llamadas) {
+  const m = new Map();
+  for (const r of llamadas) {
+    if (!esFinal(r) || r.resultado !== 'pide') continue;
+    const f = r.fecha || r.fechaPrevista;
+    if (!m.has(r.clienteId) || f > m.get(r.clienteId)) m.set(r.clienteId, f);
+  }
+  return m;
+}
+
+/** Semanas que lleva un cliente sin pedir, o null si no está «en riesgo».
+ *  - Solo clientes activos y con día de llamada.
+ *  - No marca a nadie hasta que la app lleve `umbral` semanas en uso.
+ *  - Se cuenta desde lo más reciente de: primer uso de la app, alta del
+ *    cliente, vuelta de vacaciones o último pedido. */
+export function semanasSinPedir(c, ultimoPide, fecha, primerUso, umbral = 3) {
+  if (!primerUso || !umbral || umbral < 1) return null;
+  if (c.borrado || estadoEnFecha(c, fecha) !== 'activo' || !(c.diasLlamada || []).length) return null;
+  if (diasEntre(primerUso, fecha) < umbral * 7) return null;
+  let ref = primerUso;
+  const creado = fechaDeMarca(c.creado);
+  if (creado > ref) ref = creado;
+  if (c.vacacionesHasta && c.vacacionesHasta <= fecha && c.vacacionesHasta > ref) ref = c.vacacionesHasta;
+  if (ultimoPide && ultimoPide > ref) ref = ultimoPide;
+  const semanas = Math.floor(diasEntre(ref, fecha) / 7);
+  return semanas >= umbral ? semanas : null;
+}
+
+/** Map clienteId → semanas sin pedir, solo de los que están en riesgo. */
+export function calcularRiesgo({ clientes, llamadas, fecha, primerUso, semanas = 3 }) {
+  const ultimos = ultimosPedidos(llamadas);
+  const m = new Map();
+  for (const c of clientes) {
+    const n = semanasSinPedir(c, ultimos.get(c.id), fecha, primerUso, semanas);
+    if (n != null) m.set(c.id, n);
+  }
+  return m;
+}
+
+export const textoRiesgo = (n) => `${n} ${n === 1 ? 'semana' : 'semanas'} sin pedir`;
+
+// ---------------------------------------------------------------------
+//  Recordatorios
+// ---------------------------------------------------------------------
+
+/** Recordatorios por hacer que tocan hoy o ya han vencido (los de días
+ *  anteriores siguen saliendo hasta que se marquen como hechos). */
+export function recordatoriosDelDia(recordatorios, fecha) {
+  return recordatorios
+    .filter((r) => !r.borrado && !r.hecho && r.fecha && r.fecha <= fecha)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.creado || '').localeCompare(String(b.creado || '')));
+}
+
+/** Recordatorios por hacer con fecha futura. */
+export function recordatoriosProximos(recordatorios, fecha) {
+  return recordatorios
+    .filter((r) => !r.borrado && !r.hecho && r.fecha && r.fecha > fecha)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.creado || '').localeCompare(String(b.creado || '')));
 }
 
 function agruparRegistros(llamadas, desde, hasta) {
@@ -469,13 +544,19 @@ function compararTexto(a, b) {
   return String(a || '').localeCompare(String(b || ''), 'es', { sensitivity: 'base' });
 }
 
-function crearItem(c, reg, fechaPrevista, { fecha, hora, pendienteDe = [] }) {
+function crearItem(c, reg, fechaPrevista, { fecha, hora, pendienteDe = [], riesgo = null, recordatorios = [] }) {
   const abierto = !c.horaApertura || hora >= c.horaApertura;
   const noContesta = reg?.resultado === 'no_contesta';
   const volver = reg?.volverALlamarDesde || null;
   const volverCumplido = !!volver && hora >= volver;
   const nc = resumenNoContesta(reg);
   const etiquetas = [];
+  if (recordatorios.length) {
+    etiquetas.push({
+      tipo: 'recordatorio',
+      texto: `Recordatorio: ${recordatorios[0].texto}` + (recordatorios.length > 1 ? ` (+${recordatorios.length - 1})` : ''),
+    });
+  }
   if (pendienteDe.length) {
     etiquetas.push({ tipo: 'pendiente', texto: 'Pendiente del ' + pendienteDe.map((f) => DIAS[diaSemana(f)]).join(' y ') });
   }
@@ -496,6 +577,7 @@ function crearItem(c, reg, fechaPrevista, { fecha, hora, pendienteDe = [] }) {
   if (c.pendienteCobro && Number(c.pendienteCobro.importe) > 0) {
     etiquetas.push({ tipo: 'cobro', texto: `Cobro pendiente: ${formatearImporte(c.pendienteCobro.importe)}` });
   }
+  if (riesgo != null) etiquetas.push({ tipo: 'riesgo', texto: textoRiesgo(riesgo) });
   if (!c.telefonos || !c.telefonos.length) etiquetas.push({ tipo: 'gris', texto: 'Sin teléfono' });
   return { cliente: c, registro: reg || null, fechaPrevista, abierto, noContesta, volver, volverCumplido, pendienteDe, etiquetas };
 }
@@ -520,17 +602,35 @@ export function ordenarItems(items) {
     compararTexto(a.cliente.nombreComercial, b.cliente.nombreComercial));
 }
 
-/** Calcula la pantalla Hoy. Las tareas del día NO se guardan: se calculan. */
-export function calcularListaDia({ clientes, llamadas, fecha, hora, primerUso = null, conSemanaPasada = true }) {
+/** Calcula la pantalla Hoy. Las tareas del día NO se guardan: se calculan.
+ *  Bloques: recordatorios · pendientes · hoy · masTarde · captacion · hechos. */
+export function calcularListaDia({
+  clientes, llamadas, fecha, hora, primerUso = null, conSemanaPasada = true,
+  recordatorios = [], semanasRiesgo = 3,
+}) {
   const dia = diaSemana(fecha);
   const lunes = lunesDe(fecha);
   const res = {
     fecha, hora, dia, lunes, finDeSemana: dia > 5,
-    pendientes: [], hoy: [], masTarde: [], hechos: [],
-    contador: { porLlamar: 0, hechos: 0, noContestan: 0 },
+    recordatorios: [], pendientes: [], hoy: [], masTarde: [], captacion: [], hechos: [],
+    contador: { porLlamar: 0, hechos: 0, noContestan: 0, captacion: 0 },
     semanaPasadaSinLlamar: [],
   };
   const regsPorCliente = agruparRegistros(llamadas, lunes, sumarDias(lunes, 6));
+  const riesgo = calcularRiesgo({ clientes, llamadas, fecha, primerUso, semanas: semanasRiesgo });
+
+  // Recordatorios de hoy y vencidos
+  const porId = new Map(clientes.map((c) => [c.id, c]));
+  const recPorCliente = new Map();
+  for (const r of recordatoriosDelDia(recordatorios, fecha)) {
+    const c = r.clienteId ? porId.get(r.clienteId) : null;
+    if (r.clienteId && (!c || c.borrado)) continue; // su cliente se ha borrado
+    res.recordatorios.push({ recordatorio: r, cliente: c || null, vencido: r.fecha < fecha });
+    if (c) {
+      if (!recPorCliente.has(c.id)) recPorCliente.set(c.id, []);
+      recPorCliente.get(c.id).push(r);
+    }
+  }
 
   for (const c of clientes) {
     if (c.borrado) continue;
@@ -553,13 +653,20 @@ export function calcularListaDia({ clientes, llamadas, fecha, hora, primerUso = 
     const esHoy = sinResolver.includes(fecha);
     const fp = esHoy ? fecha : sinResolver[sinResolver.length - 1];
     const reg = s.porFecha.get(fp) || null;
-    const it = crearItem(c, reg, fp, { fecha, hora, pendienteDe: esHoy ? [] : sinResolver });
-    if (it.volver && !it.volverCumplido) res.masTarde.push(it);
+    const it = crearItem(c, reg, fp, {
+      fecha, hora, pendienteDe: esHoy ? [] : sinResolver,
+      riesgo: riesgo.get(c.id) ?? null, recordatorios: recPorCliente.get(c.id) || [],
+    });
+    if (estadoEnFecha(c, fecha) === 'potencial') res.captacion.push(it); // todos sus casos van a Captación
+    else if (it.volver && !it.volverCumplido) res.masTarde.push(it);
     else (esHoy ? res.hoy : res.pendientes).push(it);
   }
 
   res.pendientes = ordenarItems(res.pendientes);
   res.hoy = ordenarItems(res.hoy);
+  // En Captación, los de «más tarde» que aún no toca van al final
+  const esperando = (it) => (it.volver && !it.volverCumplido ? 1 : 0);
+  res.captacion = ordenarItems(res.captacion).sort((a, b) => esperando(a) - esperando(b));
   res.masTarde.sort((a, b) => a.volver.localeCompare(b.volver) ||
     compararTexto(a.cliente.nombreComercial, b.cliente.nombreComercial));
   res.hechos.sort((a, b) => String(b.registro.modificado || '').localeCompare(String(a.registro.modificado || '')));
@@ -569,6 +676,7 @@ export function calcularListaDia({ clientes, llamadas, fecha, hora, primerUso = 
     porLlamar: enLista.length,
     hechos: res.hechos.length,
     noContestan: enLista.filter((it) => it.noContesta).length,
+    captacion: res.captacion.length,
   };
 
   // El lunes: aviso de los que quedaron sin llamar la semana pasada (no se arrastran)
@@ -610,7 +718,7 @@ export function calcularSemana({ clientes, llamadas, lunes, fecha, primerUso = n
       const est = estadoEnFecha(c, f);
       let situacion;
       if (esFinal(r)) situacion = r.resultado;
-      else if (est === 'baja' || est === 'potencial') continue;
+      else if (est === 'baja') continue;
       else if (s.saltada) situacion = 'saltado';
       else if (est === 'vacaciones') situacion = 'vacaciones';
       else if (s.fueraDeDia || s.ultimoFinal > f) situacion = 'cubierto';

@@ -26,7 +26,7 @@ const ctx = {
   fichaAbierta: null,
   refrescar,
   irA,
-  abrirFicha: (id) => abrirFicha(ctx, id),
+  abrirFicha: (id, opciones) => abrirFicha(ctx, id, opciones),
 };
 
 function irA(p) {

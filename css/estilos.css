@@ -347,3 +347,49 @@ body.con-banda .pc-cabecera { top: 22px; }
 @media (min-width: 600px) {
   .tarjeta-botones { grid-template-columns: 1fr 1fr 1fr 64px; }
 }
+
+/* ---------- Fase 2 · Seguimiento ---------- */
+.cabecera-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cabecera-fila h1 { margin: 0; }
+.cabecera-hoy .btn-secundario { background: rgba(255, 255, 255, .14); color: #fff; border-color: rgba(255, 255, 255, .5); flex: 0 0 auto; }
+
+/* Recordatorios */
+.bloque-recordatorios .bloque-titulo { color: #6b5310; }
+.bloque-recordatorios .bloque-num { background: var(--dorado); color: var(--azul-osc); }
+.tarjeta-recordatorio { border-left: 6px solid var(--dorado); }
+.tarjeta-recordatorio.vencido { border-left-color: var(--rojo); }
+.tarjeta-recordatorio .tarjeta-botones { grid-template-columns: 1fr 56px; }
+.rec-texto { margin: 0; font-size: 18px; font-weight: 650; white-space: pre-wrap; }
+.et-recordatorio { background: var(--dorado-claro); color: #6b5310; }
+.et-riesgo { background: var(--rojo-claro); color: var(--rojo); }
+
+/* Captación (potenciales) */
+.bloque-captacion .bloque-titulo { color: var(--azul); }
+.bloque-captacion .tarjeta { border-left: 6px solid #6f8fc4; }
+
+/* Botones de opción (cliente/potencial, cómo llegó el pedido) */
+.segmentado { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; }
+.segmento { flex: 1 1 auto; min-height: 48px; padding: 8px 12px; border-radius: 12px; border: 2px solid var(--borde); background: var(--blanco); font-size: 16px; font-weight: 650; color: var(--texto); cursor: pointer; }
+.segmento.activo { background: var(--azul); border-color: var(--azul); color: #fff; }
+
+/* Elegir cliente en un recordatorio */
+.cliente-elegido { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--azul-claro); border-radius: 12px; padding: 6px 6px 6px 12px; margin: 12px 0 4px; font-weight: 600; }
+.resultados-busqueda { display: flex; flex-direction: column; }
+.resultado-cliente { min-height: 48px; text-align: left; border: 0; border-bottom: 1px solid #eef0f3; background: none; font-size: 17px; font-weight: 600; padding: 0 4px; cursor: pointer; color: var(--texto); }
+.resultado-cliente small { color: var(--texto-2); font-weight: 400; }
+
+/* Listas de recordatorios (ficha y Más) */
+.ficha-recordatorios { margin: 6px 0 12px; }
+.ficha-recordatorios h3 { color: var(--azul); margin: 14px 0 8px; }
+.fila-recordatorio { display: flex; gap: 10px; align-items: baseline; width: 100%; min-height: 48px; text-align: left; background: var(--blanco); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-size: 16px; cursor: pointer; color: var(--texto); }
+.fila-recordatorio.hecho { opacity: .6; }
+.fr-fecha { flex: 0 0 auto; font-weight: 700; color: var(--azul); }
+.fr-fecha.vencido { color: var(--rojo); }
+.fr-texto { flex: 1; white-space: pre-wrap; }
+.fr-texto small { color: var(--texto-2); }
+
+/* Ficha: dos campos en la misma fila */
+.fila-campos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px; }
+.chip.est-riesgo { background: var(--rojo-claro); color: var(--rojo); }
+.chip.est-cobro { background: #fdecc8; color: #7a4a00; }
+.ficha-estado.est-potencial { background: var(--azul-claro); }

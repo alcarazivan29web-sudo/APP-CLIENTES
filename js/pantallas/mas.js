@@ -6,7 +6,11 @@ import * as datos from '../datos.js';
 import { filasAClientes, planificarImportacion, leerArchivo } from '../importar.js';
 import { exportarClientesExcel, hacerCopiaSeguridad } from '../exportar.js';
 import { leerCopia } from '../migraciones.js';
-import { fechaNormal, fechaDeMarca, horaDeMarca, PLANTILLA_NO_CONTESTA, rellenarPlantilla } from '../logica.js';
+import {
+  fechaNormal, fechaDeMarca, horaDeMarca, PLANTILLA_NO_CONTESTA, rellenarPlantilla,
+  recordatoriosDelDia, recordatoriosProximos, fechaCorta, DIAS, diaSemana, capitalizarPrimera,
+} from '../logica.js';
+import * as acciones from '../acciones.js';
 import { VERSION } from '../version.js';
 import { h, hoja, toast, confirmar, elegirArchivo, pantallaCompleta } from '../ui.js';
 
@@ -33,6 +37,7 @@ export function render(cont, ctx) {
         const r = await exportarClientesExcel(ctx.reloj.ahoraFH().fecha);
         if (r === 'descargado') toast('Excel guardado en Descargas');
       })),
+    tarjeta('Recordatorios', ...seccionRecordatorios(ctx)),
     tarjeta('Copia de seguridad',
       h('p', { class: 'texto-ayuda' }, `Última copia: ${ultima}. Guarda todo (clientes, llamadas, pedidos y ajustes) en un archivo. Mándatelo por WhatsApp o correo para no perder nada si se rompe o cambias de móvil.`),
       boton('Hacer copia de seguridad', () => exportarYAvisar(ctx), 'btn-principal'),
@@ -44,6 +49,31 @@ export function render(cont, ctx) {
       ctx.reloj.esPrueba ? h('p', { class: 'texto-ayuda' }, `MODO PRUEBA: base de datos aparte (${info.nombreBase}).`) : null,
       h('p', { class: 'texto-ayuda' }, `Usando la app desde el ${fechaNormal(aj.primerUso)}.`)),
   );
+}
+
+// ---------------------------------------------------------------------
+//  Recordatorios pendientes (de hoy, vencidos y próximos)
+// ---------------------------------------------------------------------
+
+function seccionRecordatorios(ctx) {
+  const { fecha } = ctx.reloj.ahoraFH();
+  const todos = datos.obtenerRecordatorios();
+  const deHoy = recordatoriosDelDia(todos, fecha);
+  const proximos = recordatoriosProximos(todos, fecha);
+  const fila = (r) => {
+    const c = r.clienteId ? datos.obtenerCliente(r.clienteId) : null;
+    return h('button', { class: 'fila-recordatorio', onClick: () => acciones.opcionesRecordatorio(r) },
+      h('span', { class: 'fr-fecha' + (r.fecha < fecha ? ' vencido' : '') }, capitalizarPrimera(DIAS[diaSemana(r.fecha)]).slice(0, 3) + ' ' + fechaCorta(r.fecha)),
+      h('span', { class: 'fr-texto' }, r.texto, c ? h('small', {}, ' · ' + c.nombreComercial) : null));
+  };
+  return [
+    h('p', { class: 'texto-ayuda' }, deHoy.length + proximos.length
+      ? `${deHoy.length} para hoy o vencidos · ${proximos.length} próximos.`
+      : 'No tienes recordatorios pendientes.'),
+    ...deHoy.map(fila),
+    proximos.length ? h('details', {}, h('summary', {}, `Próximos (${proximos.length})`), proximos.slice(0, 100).map(fila)) : null,
+    h('button', { class: 'btn btn-secundario btn-ancho', onClick: () => acciones.editarRecordatorio({ elegirCliente: true }) }, '+ Nuevo recordatorio'),
+  ];
 }
 
 // ---------------------------------------------------------------------
@@ -62,6 +92,9 @@ function formAjustes(ctx, aj) {
   const ivan = campo('WhatsApp o correo de Iván (resumen semanal)', aj.contactoIvan, null, { placeholder: 'Ej.: 600 123 456 o correo@ejemplo.com' });
   const plantilla = campo('Mensaje cuando no contesta', aj.plantillas.noContesta,
     'Puedes usar {contacto}, {nombre} (del bar), {comercial} (tu nombre de pila) y {dia}.', { multilinea: true });
+  const riesgo = campo('Semanas sin pedir para marcar «en riesgo»', String(aj.semanasRiesgo ?? 3),
+    'Un cliente activo que lleve estas semanas sin pedir sale con la etiqueta «X semanas sin pedir».', { tipo: 'number', inputmode: 'numeric' });
+  riesgo.el.min = '1'; riesgo.el.max = '52';
   const vista = h('p', { class: 'vista-previa' });
   const actualizarVista = () => {
     vista.textContent = 'Ejemplo: ' + rellenarPlantilla(plantilla.el.value, {
@@ -78,10 +111,14 @@ function formAjustes(ctx, aj) {
       class: 'btn btn-texto',
       onClick: () => { plantilla.el.value = PLANTILLA_NO_CONTESTA; actualizarVista(); },
     }, 'Volver al mensaje original'),
+    riesgo.grupo,
     h('button', {
       class: 'btn btn-principal btn-ancho',
       onClick: async () => {
+        const sem = Math.round(Number(riesgo.el.value));
+        if (!(sem >= 1 && sem <= 52)) { toast('Las semanas para «en riesgo» tienen que ser un número entre 1 y 52'); riesgo.el.focus(); return; }
         await datos.guardarAjustes({
+          semanasRiesgo: sem,
           nombreComercial: nombre.el.value.trim(),
           whatsappOficina: oficina.el.value.trim(),
           contactoIvan: ivan.el.value.trim(),

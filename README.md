@@ -6,7 +6,14 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - Los datos se guardan **solo en el móvil**. No hay servidor ni nube.
 - **Los datos de clientes nunca están en el código ni se suben a GitHub.** Se cargan en el móvil con el botón «Importar».
 
-**Estado:** fase 1 (Llamadas) terminada. Las fases 2 (Seguimiento) y 3 (Oficina) van después.
+**Estado:** fases 1 (Llamadas) y 2 (Seguimiento) terminadas. La fase 3 (Oficina) va después.
+
+**Qué hace la fase 2:**
+- **Registrar pedido** (ficha o menú ⋯): pedidos que llegan fuera de su día (llamó el cliente, WhatsApp o visita). Ese cliente ya no sale para llamar el resto de la semana.
+- **Recordatorios** (botón «+ Recordatorio» en Hoy, ficha o Más): salen arriba del todo el día que tocan y siguen saliendo como «vencidos» hasta marcarlos como hechos.
+- **Clientes en riesgo:** la etiqueta «X semanas sin pedir» (3 por defecto, se cambia en Ajustes). No marca a nadie hasta que la app lleve ese tiempo en uso. Solo cuenta clientes activos con día de llamada.
+- **Ficha:** ★ importante, pide habitualmente, condiciones y cobro pendiente. Filtros «En riesgo» y «Cobro pendiente» en Clientes.
+- **Potenciales:** con el + de Clientes, eligiendo «Potencial». Si tienen día, salen en el bloque **Captación** de Hoy. Si piden, la app pregunta «¿Pasar a cliente?».
 
 ---
 

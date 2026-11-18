@@ -7,7 +7,8 @@ import * as acciones from '../acciones.js';
 import { exportarYAvisar } from './mas.js';
 import {
   calcularListaDia, calcularSemana, fechaLarga, fechaDeMarca, diasEntre, formatearTelefono,
-  sumarDias, lunesDe, DIAS, NOMBRE_SITUACION, analizarCierre,
+  sumarDias, lunesDe, DIAS, NOMBRE_SITUACION, analizarCierre, fechaCorta, diaSemana, capitalizarPrimera,
+  ORIGENES_PEDIDO, formatearImporte,
 } from '../logica.js';
 import { h } from '../ui.js';
 
@@ -19,10 +20,18 @@ export function render(cont, ctx) {
   const aj = datos.obtenerAjustes();
   const clientes = datos.obtenerClientes();
   const llamadas = datos.obtenerLlamadas();
-  const lista = calcularListaDia({ clientes, llamadas, fecha, hora, primerUso: aj.primerUso });
+  const lista = calcularListaDia({
+    clientes, llamadas, fecha, hora, primerUso: aj.primerUso,
+    recordatorios: datos.obtenerRecordatorios(), semanasRiesgo: aj.semanasRiesgo,
+  });
 
   const cab = h('header', { class: 'cabecera-hoy' },
-    h('h1', {}, fechaLarga(fecha)),
+    h('div', { class: 'cabecera-fila' },
+      h('h1', {}, fechaLarga(fecha)),
+      h('button', {
+        class: 'btn btn-secundario btn-peq', 'aria-label': 'Nuevo recordatorio',
+        onClick: () => acciones.editarRecordatorio({ elegirCliente: true }),
+      }, '+ Recordatorio')),
     lista.finDeSemana
       ? h('p', { class: 'contador' }, 'Fin de semana')
       : h('p', { class: 'contador' },
@@ -31,6 +40,9 @@ export function render(cont, ctx) {
   );
 
   const partes = [cab, ...avisos(ctx, aj, clientes, lista, fecha)];
+  if (lista.recordatorios.length) {
+    partes.push(bloque('recordatorios', 'Recordatorios', lista.recordatorios, (it) => tarjetaRecordatorio(it), 'bloque-recordatorios'));
+  }
 
   if (!clientes.length) {
     partes.push(h('div', { class: 'vacio' },
@@ -52,6 +64,10 @@ export function render(cont, ctx) {
   partes.push(bloque('hoy', 'Por llamar hoy', lista.hoy, tarj, '',
     lista.pendientes.length || lista.masTarde.length ? 'Nadie más por llamar hoy.' : 'No hay nadie por llamar hoy.'));
   if (lista.masTarde.length) partes.push(bloque('tarde', 'Más tarde', lista.masTarde, (it) => tarjeta(it, fecha, true), 'bloque-tarde'));
+  if (lista.captacion.length) {
+    partes.push(bloque('captacion', 'Captación', lista.captacion,
+      (it) => tarjeta(it, fecha, !!(it.volver && !it.volverCumplido)), 'bloque-captacion'));
+  }
   if (lista.hechos.length) partes.push(bloque('hechos', 'Hechos hoy', lista.hechos, (it) => tarjetaHecho(it), 'bloque-hechos'));
   cont.replaceChildren(...partes);
 }
@@ -153,7 +169,27 @@ export function detalleCliente(c) {
     fila('Nombre fiscal', c.nombreFiscal),
     fila('Pide habitualmente', c.pideHabitualmente),
     fila('Condiciones', c.condiciones),
+    c.pendienteCobro && Number(c.pendienteCobro.importe) > 0
+      ? fila('Cobro pendiente', formatearImporte(c.pendienteCobro.importe) + (c.pendienteCobro.nota ? ' · ' + c.pendienteCobro.nota : '')) : null,
     fila('Notas', c.notas))];
+}
+
+function tarjetaRecordatorio(it) {
+  const r = it.recordatorio;
+  const c = it.cliente;
+  const cuando = it.vencido ? `Vencido · ${capitalizarPrimera(DIAS[diaSemana(r.fecha)]).slice(0, 3)} ${fechaCorta(r.fecha)}` : null;
+  return h('article', { class: 'tarjeta tarjeta-recordatorio' + (it.vencido ? ' vencido' : '') },
+    h('div', {
+      class: 'tarjeta-cuerpo', role: 'button', tabindex: '0',
+      onClick: () => acciones.opcionesRecordatorio(r),
+    },
+    h('p', { class: 'rec-texto' }, r.texto),
+    c || cuando ? h('div', { class: 'etiquetas' },
+      cuando ? h('span', { class: 'etiqueta et-aviso' }, cuando) : null,
+      c ? h('span', { class: 'etiqueta et-info' }, c.nombreComercial) : null) : null),
+    h('div', { class: 'tarjeta-botones' },
+      h('button', { class: 'btn btn-pide', onClick: () => acciones.recordatorioHecho(r) }, '✓ Hecho'),
+      h('button', { class: 'btn btn-mas', 'aria-label': 'Más opciones', onClick: () => acciones.opcionesRecordatorio(r) }, '⋯')));
 }
 
 function tarjetaHecho(it) {
@@ -165,6 +201,7 @@ function tarjetaHecho(it) {
       h('h3', { class: 'tarjeta-nombre' }, c.nombreComercial),
       h('div', { class: 'etiquetas' },
         h('span', { class: `etiqueta et-${r.resultado}` }, txt),
+        ORIGENES_PEDIDO[r.origen] ? h('span', { class: 'etiqueta et-info' }, ORIGENES_PEDIDO[r.origen]) : null,
         r.resultado === 'pide' && r.enviadoOficina ? h('span', { class: 'etiqueta et-gris' }, 'Enviado a oficina') : null),
       r.pedido ? h('p', { class: 'tarjeta-pedido' }, r.pedido) : null,
       r.nota ? h('p', { class: 'tarjeta-sub' }, r.nota) : null),

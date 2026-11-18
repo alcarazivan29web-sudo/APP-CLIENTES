@@ -3,10 +3,11 @@
 // =====================================================================
 
 import * as datos from '../datos.js';
-import { coincideBusqueda, zonasDe, estadoEnFecha, DIAS_LETRA, NOMBRE_ESTADO } from '../logica.js';
+import { coincideBusqueda, zonasDe, estadoEnFecha, DIAS_LETRA, NOMBRE_ESTADO, calcularRiesgo, formatearImporte } from '../logica.js';
 import { h, hoja, toast, selectorDias } from '../ui.js';
 
-const filtros = { texto: '', dia: '', zona: '', poblacion: '', estado: 'sin_baja', importantes: false };
+const FILTROS_INICIALES = { texto: '', dia: '', zona: '', poblacion: '', estado: 'sin_baja', importantes: false, riesgo: false, cobro: false };
+const filtros = { ...FILTROS_INICIALES };
 let seleccionando = false;
 const seleccion = new Set();
 const LIMITE = 150; // tarjetas que se pintan de golpe (el resto con «Ver más»)
@@ -14,7 +15,9 @@ let mostrar = LIMITE;
 
 const compararEs = (a, b) => String(a || '').localeCompare(String(b || ''), 'es', { sensitivity: 'base' });
 
-function filtrar(clientes, fecha) {
+const tieneCobro = (c) => !!c.pendienteCobro && Number(c.pendienteCobro.importe) > 0;
+
+function filtrar(clientes, fecha, riesgo) {
   return clientes.filter((c) => {
     const est = estadoEnFecha(c, fecha);
     if (filtros.estado === 'sin_baja' && est === 'baja') return false;
@@ -24,19 +27,23 @@ function filtrar(clientes, fecha) {
     if (filtros.zona && !zonasDe(c).includes(filtros.zona)) return false;
     if (filtros.poblacion && c.poblacion !== filtros.poblacion) return false;
     if (filtros.importantes && !c.importante) return false;
+    if (filtros.riesgo && !riesgo.has(c.id)) return false;
+    if (filtros.cobro && !tieneCobro(c)) return false;
     return coincideBusqueda(c, filtros.texto);
   }).sort((a, b) => compararEs(a.nombreComercial, b.nombreComercial));
 }
 
 function numFiltros() {
   return ['dia', 'zona', 'poblacion'].filter((k) => filtros[k]).length +
-    (filtros.estado !== 'sin_baja' ? 1 : 0) + (filtros.importantes ? 1 : 0);
+    (filtros.estado !== 'sin_baja' ? 1 : 0) + (filtros.importantes ? 1 : 0) + (filtros.riesgo ? 1 : 0) + (filtros.cobro ? 1 : 0);
 }
 
 export function render(cont, ctx) {
   const { fecha } = ctx.reloj.ahoraFH();
   const todos = datos.obtenerClientes();
-  const lista = filtrar(todos, fecha);
+  const aj = datos.obtenerAjustes();
+  const riesgo = calcularRiesgo({ clientes: todos, llamadas: datos.obtenerLlamadas(), fecha, primerUso: aj.primerUso, semanas: aj.semanasRiesgo });
+  const lista = filtrar(todos, fecha, riesgo);
   for (const id of [...seleccion]) if (!todos.some((c) => c.id === id)) seleccion.delete(id);
 
   const buscador = h('input', {
@@ -59,10 +66,12 @@ export function render(cont, ctx) {
   const nf = numFiltros();
   const chips = h('div', { class: 'chips' },
     chip('Sin día asignado', filtros.dia === 'sin', () => { filtros.dia = filtros.dia === 'sin' ? '' : 'sin'; mostrar = LIMITE; ctx.refrescar(); }),
-    chip('★ Importantes', filtros.importantes, () => { filtros.importantes = !filtros.importantes; ctx.refrescar(); }),
+    chip('★ Importantes', filtros.importantes, () => { filtros.importantes = !filtros.importantes; mostrar = LIMITE; ctx.refrescar(); }),
+    chip(`En riesgo (${riesgo.size})`, filtros.riesgo, () => { filtros.riesgo = !filtros.riesgo; mostrar = LIMITE; ctx.refrescar(); }),
+    chip('Cobro pendiente', filtros.cobro, () => { filtros.cobro = !filtros.cobro; mostrar = LIMITE; ctx.refrescar(); }),
     chip(nf ? `Filtros (${nf})` : 'Filtros', nf > 0, () => abrirFiltros(ctx, todos)),
     nf || filtros.texto ? chip('Quitar filtros', false, () => {
-      Object.assign(filtros, { texto: '', dia: '', zona: '', poblacion: '', estado: 'sin_baja', importantes: false });
+      Object.assign(filtros, FILTROS_INICIALES);
       ctx.refrescar();
     }) : null);
 
@@ -74,7 +83,7 @@ export function render(cont, ctx) {
     : null;
 
   const filas = h('div', { class: 'lista-clientes' },
-    lista.slice(0, mostrar).map((c) => filaCliente(c, fecha, ctx)),
+    lista.slice(0, mostrar).map((c) => filaCliente(c, fecha, ctx, riesgo.get(c.id))),
     lista.length > mostrar ? h('button', { class: 'btn btn-secundario btn-ancho', onClick: () => { mostrar += LIMITE; ctx.refrescar(); } },
       `Ver ${Math.min(LIMITE, lista.length - mostrar)} más`) : null,
     lista.length ? null : h('p', { class: 'vacio-bloque' }, todos.length ? 'Ningún cliente coincide.' : 'Todavía no hay clientes. Impórtalos desde «Más».'));
@@ -95,7 +104,7 @@ export function render(cont, ctx) {
     barraSel, filas, pie].filter(Boolean));
 }
 
-function filaCliente(c, fecha, ctx) {
+function filaCliente(c, fecha, ctx, semanasRiesgo) {
   const est = estadoEnFecha(c, fecha);
   const dias = (c.diasLlamada || []).map((d) => DIAS_LETRA[d]).join(' ');
   const sel = seleccion.has(c.id);
@@ -111,7 +120,9 @@ function filaCliente(c, fecha, ctx) {
     h('span', { class: 'fc-sub' }, [c.poblacion, c.contacto].filter(Boolean).join(' · ') || ' ')),
   h('span', { class: 'fc-lado' },
     dias ? h('span', { class: 'fc-dias' }, dias) : h('span', { class: 'fc-dias vacio' }, 'Sin día'),
-    est !== 'activo' ? h('span', { class: `chip est-${est}` }, NOMBRE_ESTADO[est]) : null));
+    est !== 'activo' ? h('span', { class: `chip est-${est}` }, NOMBRE_ESTADO[est]) : null,
+    semanasRiesgo != null ? h('span', { class: 'chip est-riesgo' }, `${semanasRiesgo} sem. sin pedir`) : null,
+    tieneCobro(c) ? h('span', { class: 'chip est-cobro' }, formatearImporte(c.pendienteCobro.importe)) : null));
 }
 
 function abrirFiltros(ctx, todos) {
@@ -121,7 +132,7 @@ function abrirFiltros(ctx, todos) {
   const sDia = h('select', { class: 'campo' }, opciones([['', 'Todos'], ['1', 'Lunes'], ['2', 'Martes'], ['3', 'Miércoles'], ['4', 'Jueves'], ['5', 'Viernes'], ['sin', 'Sin día asignado']]));
   const sZona = h('select', { class: 'campo' }, opciones([['', 'Todas'], ...zonas.map((z) => [z, z])]));
   const sPob = h('select', { class: 'campo' }, opciones([['', 'Todas'], ...pobls.map((p) => [p, p])]));
-  const sEst = h('select', { class: 'campo' }, opciones([['sin_baja', 'Todos menos bajas'], ['activo', 'Activos'], ['vacaciones', 'De vacaciones'], ['baja', 'De baja'], ['todos', 'Todos']]));
+  const sEst = h('select', { class: 'campo' }, opciones([['sin_baja', 'Todos menos bajas'], ['activo', 'Activos'], ['potencial', 'Potenciales'], ['vacaciones', 'De vacaciones'], ['baja', 'De baja'], ['todos', 'Todos']]));
   const cImp = h('input', { type: 'checkbox', checked: filtros.importantes });
   sDia.value = filtros.dia; sZona.value = filtros.zona; sPob.value = filtros.poblacion; sEst.value = filtros.estado;
   const campo = (t, el) => h('label', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, t), el);

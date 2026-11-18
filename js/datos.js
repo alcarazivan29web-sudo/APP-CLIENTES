@@ -326,6 +326,32 @@ export async function registrarLlamada(registro) {
 }
 
 // ---------------------------------------------------------------------
+//  Recordatorios
+// ---------------------------------------------------------------------
+
+export function obtenerRecordatorios() {
+  const out = [];
+  for (const r of cache.recordatorios.values()) if (!r.borrado) out.push(r);
+  return out;
+}
+
+export function recordatoriosDeCliente(clienteId) {
+  return obtenerRecordatorios().filter((r) => r.clienteId === clienteId)
+    .sort((a, b) => (a.hecho - b.hecho) || String(a.fecha).localeCompare(String(b.fecha)));
+}
+
+export async function guardarRecordatorio(r) {
+  return (await guardar('recordatorios', [r]))[0];
+}
+
+/** Borrado suave. */
+export async function borrarRecordatorio(id) {
+  const r = cache.recordatorios.get(id);
+  if (!r) return null;
+  return guardarRecordatorio({ ...r, borrado: true, fechaBorrado: ahora() });
+}
+
+// ---------------------------------------------------------------------
 //  Ajustes
 // ---------------------------------------------------------------------
 
