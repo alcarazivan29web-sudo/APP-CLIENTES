@@ -17,6 +17,8 @@ export const COLUMNAS_CLIENTES = {
   poblacion: ['POBLACION', 'LOCALIDAD', 'MUNICIPIO'],
   zona: ['ZONA / RUTA', 'ZONA/RUTA', 'ZONA', 'RUTA'],
   contacto: ['CONTACTO', 'PERSONA DE CONTACTO'],
+  direccion: ['DIRECCION', 'DOMICILIO', 'DIRECCION POSTAL', 'CALLE'],
+  email: ['EMAIL', 'E-MAIL', 'CORREO', 'CORREO ELECTRONICO', 'MAIL'],
   telefono1: ['TELEFONO', 'TELEFONO 1', 'TEL', 'MOVIL'],
   telefono2: ['TELEFONO 2', 'TEL 2', 'OTROS TELEFONOS'],
   telefonosConNombre: ['TELEFONOS CON NOMBRE'],
@@ -30,7 +32,7 @@ export const COLUMNAS_CLIENTES = {
 };
 
 /** Campos que vienen del Excel y que una nueva importación puede actualizar. */
-export const CAMPOS_EXCEL = ['codigo', 'nombreComercial', 'nombreFiscal', 'poblacion', 'zona', 'contacto',
+export const CAMPOS_EXCEL = ['codigo', 'nombreComercial', 'nombreFiscal', 'poblacion', 'zona', 'contacto', 'direccion', 'email',
   'telefonos', 'telefonosInfo', 'diasLlamada', 'diaCierre', 'formaPago', 'horaApertura', 'llamarDesde', 'notas', 'hojasOrigen'];
 
 function mapaCabeceras(cabecera) {
@@ -47,6 +49,7 @@ function mapaCabeceras(cabecera) {
 }
 
 const texto = (v) => (v == null ? '' : String(v).trim());
+export const esEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || ''));
 const vacio = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 0) ||
   (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
 
@@ -85,6 +88,9 @@ export function filasAClientes(filas) {
     const llamarDesde = analizarHora(llamarTxt);
     if (texto(llamarTxt) && !llamarDesde) avisos.push(`Fila ${nFila} (${nombre}): no entiendo la hora «${texto(llamarTxt)}» de «Llamar a partir de».`);
     // «Teléfonos con nombre» (lo escribe la propia app al exportar) añade nombres y uso
+    const emailTxt = texto(col(f, 'email'));
+    const email = emailTxt.toLowerCase().replace(/^mailto:/, '').replace(/\s/g, '');
+    if (email && !esEmail(email)) avisos.push(`Fila ${nFila} (${nombre}): «${emailTxt}» no parece un email (se guarda igual).`);
     const conNombre = leerTelefonosConNombre(col(f, 'telefonosConNombre'));
     const telefonos = extraerTelefonos(col(f, 'telefono1'), col(f, 'telefono2'));
     for (const t of conNombre.telefonos) if (!telefonos.includes(t)) telefonos.push(t);
@@ -95,6 +101,8 @@ export function filasAClientes(filas) {
       poblacion: texto(col(f, 'poblacion')),
       zona: texto(col(f, 'zona')),
       contacto: texto(col(f, 'contacto')),
+      direccion: texto(col(f, 'direccion')),
+      email,
       telefonos,
       telefonosInfo: conNombre.info,
       diasLlamada: dias.dias,

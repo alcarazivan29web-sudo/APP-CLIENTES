@@ -5,7 +5,7 @@
 //  IndexedDB y no se tocan al actualizar.
 // =====================================================================
 
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 const CACHE = 'llamadas-vinoliva-' + VERSION;
 
 // Versión de cierre: ponlo en true A LA VEZ que CIERRE.activo en js/cierre.js.

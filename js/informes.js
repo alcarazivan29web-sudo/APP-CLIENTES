@@ -35,7 +35,7 @@ export const nombreExcelSemanal = (lunes, comercial) => `semana_${lunes}_${nombr
 /** Campos que interesan a la oficina para actualizar ICG. */
 export const CAMPOS_ICG = {
   nombreComercial: 'Nombre comercial', nombreFiscal: 'Nombre fiscal', telefonos: 'Teléfonos', contacto: 'Contacto',
-  poblacion: 'Población', diasLlamada: 'Días de llamada', diaCierre: 'Día que cierra', formaPago: 'Forma de pago',
+  poblacion: 'Población', direccion: 'Dirección', email: 'Email', diasLlamada: 'Días de llamada', diaCierre: 'Día que cierra', formaPago: 'Forma de pago',
   estado: 'Estado', borrado: 'Borrado de la app',
 };
 
@@ -251,7 +251,7 @@ export const COLUMNAS_EXCEL_SEMANAL = {
   Llamadas: ['Fecha prevista', 'Día', 'Población', 'Resultado', 'Cómo', 'Nº intentos', 'Hora último intento', 'WhatsApp enviado', 'Apuntado el'],
   Pedidos: ['Fecha', 'Hora', 'Población', 'Cómo llegó', 'Pedido', 'Enviado a oficina', 'Hora de envío'],
   Encargos: ['Fecha', 'Hora', 'Población', 'Encargo', 'Nota', 'Clientes en el encargo'],
-  Clientes: ['Nombre fiscal', 'Población', 'Zona', 'Contacto', 'Días de llamada', 'Estado', 'Importante', 'Último pedido',
+  Clientes: ['Nombre fiscal', 'Población', 'Dirección', 'Zona', 'Contacto', 'Email', 'Días de llamada', 'Estado', 'Importante', 'Último pedido',
     'Semanas sin pedir', 'En riesgo', 'Cobro pendiente €', 'Nota del cobro', 'Pide habitualmente', 'Condiciones',
     'Llamar a partir de', 'Condiciones especiales', 'Falta por configurar', 'Id interno'],
   Condiciones: ['Producto', 'Condición', 'Hasta', 'Nota', 'Apuntada el', 'Estado', 'Nueva esta semana'],
@@ -314,7 +314,7 @@ export function hojasExcelSemanal(d, comercial) {
     .sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true }) || compararTexto(a.nombreComercial, b.nombreComercial))
     .map((c) => {
       const ultimo = d.ultimos.get(c.id) || '';
-      return [...pre(c), c.nombreFiscal || '', c.poblacion || '', c.zona || '', c.contacto || '',
+      return [...pre(c), c.nombreFiscal || '', c.poblacion || '', c.direccion || '', c.zona || '', c.contacto || '', c.email || '',
         (c.diasLlamada || []).map((x) => DIAS_EXCEL[x]).join(', '), NOMBRE_ESTADO[c.estado] || c.estado, c.importante ? 'Sí' : '',
         ultimo, ultimo ? Math.floor(diasEntre(ultimo, d.fechaRef) / 7) : '', d.mapaRiesgo.has(c.id) ? 'Sí' : '',
         c.pendienteCobro?.importe ?? '', c.pendienteCobro?.nota || '', c.pideHabitualmente || '', c.condiciones || '',

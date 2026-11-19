@@ -11,7 +11,8 @@ import {
   telefonosDe, USOS_TELEFONO, NOMBRES_TELEFONO, faltaPorConfigurar, NOMBRE_DATO, condicionVacia, textoCondicion,
   tituloEncargo, iconoEncargo,
 } from '../logica.js';
-import { h, hoja, pantallaCompleta, confirmar, toast, selectorDias } from '../ui.js';
+import { h, hoja, pantallaCompleta, confirmar, toast, selectorDias, abrirEnlace } from '../ui.js';
+import { esEmail } from '../importar.js';
 
 /** id: cliente a abrir; sin id, cliente nuevo. opciones.potencial: el nuevo empieza como potencial. */
 export function abrirFicha(ctx, id, { potencial = false } = {}) {
@@ -38,7 +39,7 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
   const campo = (etiqueta, valor, extra = {}) => {
     const el = extra.multilinea
       ? h('textarea', { class: 'campo', rows: extra.filas || 3 }, valor || '')
-      : h('input', { class: 'campo', type: extra.tipo || 'text', value: valor || '', inputmode: extra.inputmode });
+      : h('input', { class: 'campo', type: extra.tipo || 'text', value: valor || '', inputmode: extra.inputmode, autocomplete: extra.autocomplete, placeholder: extra.placeholder });
     return { el, grupo: h('label', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, etiqueta), el) };
   };
 
@@ -46,6 +47,8 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
     nombreComercial: campo('Nombre comercial *', c.nombreComercial),
     poblacion: campo('Población', c.poblacion),
     contacto: campo('Contacto', c.contacto),
+    direccion: campo('Dirección', c.direccion, { placeholder: 'Calle, número…', autocomplete: 'off' }),
+    email: campo('Email', c.email, { tipo: 'email', inputmode: 'email', placeholder: 'correo@ejemplo.com', autocomplete: 'off' }),
     diaCierre: campo('Día que cierra', c.diaCierre),
     formaPago: campo('Forma de pago', c.formaPago),
     horaApertura: campo('Hora de apertura', c.horaApertura || '', { tipo: 'time' }),
@@ -75,6 +78,8 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
   const guardar = async () => {
     const nombre = f.nombreComercial.el.value.trim();
     if (!nombre) { toast('El nombre comercial es obligatorio'); f.nombreComercial.el.focus(); return; }
+    const email = f.email.el.value.trim().toLowerCase();
+    if (email && !esEmail(email)) { toast('El email no se entiende. Revísalo (tiene que ser tipo nombre@empresa.com).'); f.email.el.focus(); return; }
     const telefonos = tels.valor();
     if (tels.hayErrores()) { toast('Hay un teléfono que no se entiende. Revísalo (9 cifras, o con + delante si es extranjero).'); return; }
     if (!telefonos.telefonos.length && (esNuevo || (c.telefonos || []).length)) {
@@ -97,6 +102,8 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
       nombreComercial: nombre,
       poblacion: f.poblacion.el.value.trim(),
       contacto: f.contacto.el.value.trim(),
+      direccion: f.direccion.el.value.trim(),
+      email,
       telefonos: telefonos.telefonos,
       telefonosInfo: telefonos.info,
       diaCierre: f.diaCierre.el.value.trim(),
@@ -148,7 +155,8 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
 
   const contacto = esNuevo ? null : h('div', { class: 'fila-botones' },
     h('button', { class: 'btn btn-llamar', disabled: !(c.telefonos || []).length, onClick: () => acciones.llamar(c, fecha) }, 'Llamar'),
-    h('button', { class: 'btn btn-whatsapp', disabled: !(c.telefonos || []).length, onClick: () => acciones.whatsapp(c, null) }, 'WhatsApp'));
+    h('button', { class: 'btn btn-whatsapp', disabled: !(c.telefonos || []).length, onClick: () => acciones.whatsapp(c, null) }, 'WhatsApp'),
+    c.email ? h('button', { class: 'btn btn-secundario', onClick: () => abrirEnlace('mailto:' + c.email) }, 'Correo') : null);
   const otrasAcciones = esNuevo ? null : h('div', { class: 'fila-botones' },
     h('button', { class: 'btn btn-secundario', onClick: () => acciones.registrarPedido(c) }, 'Registrar pedido'),
     h('button', { class: 'btn btn-secundario', onClick: () => acciones.editarRecordatorio({ cliente: c }) }, '+ Recordatorio'));
@@ -206,8 +214,9 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
       selTipo ? h('div', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, '¿Es cliente o potencial?'), selTipo) : null,
       f.nombreComercial.grupo,
       h('label', { class: 'casilla-fila' }, importante, ' ★ Importante (sale el primero en la lista)'),
-      f.poblacion.grupo, f.contacto.grupo,
+      f.poblacion.grupo, f.direccion.grupo, f.contacto.grupo,
       h('div', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, 'Teléfonos *'), tels.el),
+      f.email.grupo,
       h('div', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, 'Días de llamada'), dias.el),
       f.diaCierre.grupo, f.formaPago.grupo,
       h('div', { class: 'fila-campos dos' }, f.horaApertura.grupo, f.llamarDesde.grupo),

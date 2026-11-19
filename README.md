@@ -6,7 +6,7 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - Los datos se guardan **solo en el móvil**. No hay servidor ni nube.
 - **Los datos de clientes nunca están en el código ni se suben a GitHub.** Se cargan en el móvil con el botón «Importar».
 
-**Estado:** fases 1 (Llamadas), 2 (Seguimiento), 3 (Oficina), 4 (Ficha completa), 5 (Encargos a la oficina) y 6 (La oficina manda) terminadas. Versión 1.5.0.
+**Estado:** fases 1 (Llamadas), 2 (Seguimiento), 3 (Oficina), 4 (Ficha completa), 5 (Encargos a la oficina) y 6 (La oficina manda) terminadas. Fase 7 (conexión con el CRM de la oficina) en marcha. Versión 1.6.0.
 
 **Qué hace la fase 2:**
 - **Registrar pedido** (ficha o menú ⋯): pedidos que llegan fuera de su día (llamó el cliente, WhatsApp o visita). Ese cliente ya no sale para llamar el resto de la semana.
@@ -50,6 +50,9 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - **Mensaje de la oficina:** sale arriba en Hoy («📣 Mensaje de la oficina») hasta que el comercial pulsa **Entendido**. Puede tener fechas «desde» y «hasta». Se vuelve a ver en Más → «Ver mensaje de la oficina».
 - **Lista de encargos de la oficina:** si el Excel trae la hoja Encargos, el botón «📌 Pedir a la oficina» enseña esa lista. Siempre queda una opción para escribir libremente. Los encargos ya enviados conservan su nombre aunque cambie la lista.
 - **Versión de cierre preparada y apagada:** ver el apartado 8.
+
+**Fase 7 (en marcha) · Conexión con el CRM de la oficina:**
+- La ficha del cliente tiene **Dirección** y **Email** (con botón «Correo»). Se importan y exportan en el Excel de clientes (columnas «Dirección» y «Email», también valen «Correo», «Domicilio»…) y salen en la hoja Clientes del Excel semanal.
 
 ---
 
@@ -204,8 +207,8 @@ Los datos están en el móvil (IndexedDB), **no** en los archivos de la app. Act
 
 1. Haz los cambios en los archivos.
 2. Sube el número de versión en **dos sitios** (el mismo número en los dos):
-   - `js/version.js` → `export const VERSION = '1.5.0';`
-   - `sw.js` → `const VERSION = '1.5.0';`
+   - `js/version.js` → `export const VERSION = '1.6.0';`
+   - `sw.js` → `const VERSION = '1.6.0';`
 3. Si has añadido un archivo nuevo de la app, añádelo también a la lista `ARCHIVOS` de `sw.js`.
 4. Pasa los tests: `node --test`.
 5. En GitHub Desktop: comprueba que en **Changes** no hay datos de clientes, escribe un resumen, pulsa **Commit to main** y luego **Push origin**.

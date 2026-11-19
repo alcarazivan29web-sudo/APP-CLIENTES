@@ -267,6 +267,7 @@ export const NOMBRE_ESTADO = { activo: 'Activo', vacaciones: 'Vacaciones', baja:
 export function clienteVacio() {
   return {
     codigo: '', nombreComercial: '', nombreFiscal: '', poblacion: '', zona: '', contacto: '',
+    direccion: '', email: '', // fase 7: para el CRM de la oficina
     telefonos: [], diasLlamada: [], diasLlamadaDesde: null, diaCierre: '', formaPago: '',
     horaApertura: null, notas: '', pideHabitualmente: '', condiciones: '', pendienteCobro: null,
     // Fase 4: nombre y uso de cada teléfono ({ '600111222': { nombre: 'Jefe', uso: 'llamar' } }),
@@ -1107,7 +1108,7 @@ export function coincidePromo(p, consulta) {
 // ---------------------------------------------------------------------
 
 export function textoBusqueda(c) {
-  return normalizarTexto([c.nombreComercial, c.nombreFiscal, c.poblacion, c.contacto, c.codigo,
+  return normalizarTexto([c.nombreComercial, c.nombreFiscal, c.poblacion, c.contacto, c.codigo, c.direccion, c.email,
     ...Object.values(c.telefonosInfo || {}).map((i) => i.nombre)].join(' ')) +
     ' ' + (c.telefonos || []).join(' ');
 }

@@ -12,7 +12,7 @@
 
 import { clienteVacio, registroVacio, ajustesVacios, recordatorioVacio, promocionVacia, encargoVacio } from './logica.js';
 
-export const ESQUEMA_ACTUAL = 3;
+export const ESQUEMA_ACTUAL = 4;
 export const FORMATO_COPIA = 'llamadas-vinoliva';
 export const COLECCIONES = ['clientes', 'llamadas', 'recordatorios', 'promociones', 'encargos', 'cambios', 'ajustes'];
 
@@ -53,6 +53,11 @@ export const MIGRACIONES = {
   3: (d) => ({
     ...d,
     encargos: d.encargos.map(completarEncargo),
+  }),
+  // Versión 4 (app 1.6.0, fase 7): los clientes reciben «direccion» y «email» vacíos.
+  4: (d) => ({
+    ...d,
+    clientes: d.clientes.map(completarCliente),
   }),
 };
 
