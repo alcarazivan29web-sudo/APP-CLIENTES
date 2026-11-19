@@ -3,10 +3,16 @@
 // =====================================================================
 
 import * as datos from '../datos.js';
-import { coincideBusqueda, zonasDe, estadoEnFecha, DIAS_LETRA, NOMBRE_ESTADO, calcularRiesgo, formatearImporte } from '../logica.js';
+import {
+  coincideBusqueda, zonasDe, estadoEnFecha, DIAS_LETRA, NOMBRE_ESTADO, calcularRiesgo, formatearImporte,
+  faltaPorConfigurar, textoFalta,
+} from '../logica.js';
 import { h, hoja, toast, selectorDias } from '../ui.js';
 
-const FILTROS_INICIALES = { texto: '', dia: '', zona: '', poblacion: '', estado: 'sin_baja', importantes: false, riesgo: false, cobro: false };
+const FILTROS_INICIALES = {
+  texto: '', dia: '', zona: '', poblacion: '', estado: 'sin_baja', importantes: false, riesgo: false, cobro: false,
+  completar: '', // '' | 'importante' (sin teléfono o sin día) | 'todo' (cualquier dato que falte)
+};
 const filtros = { ...FILTROS_INICIALES };
 let seleccionando = false;
 const seleccion = new Set();
@@ -16,6 +22,12 @@ let mostrar = LIMITE;
 const compararEs = (a, b) => String(a || '').localeCompare(String(b || ''), 'es', { sensitivity: 'base' });
 
 const tieneCobro = (c) => !!c.pendienteCobro && Number(c.pendienteCobro.importe) > 0;
+
+/** Desde Hoy: abrir Clientes con el filtro «por completar». */
+export function verPorCompletar(soloImportante = true) {
+  Object.assign(filtros, FILTROS_INICIALES, { completar: soloImportante ? 'importante' : 'todo' });
+  mostrar = LIMITE;
+}
 
 function filtrar(clientes, fecha, riesgo) {
   return clientes.filter((c) => {
@@ -29,13 +41,15 @@ function filtrar(clientes, fecha, riesgo) {
     if (filtros.importantes && !c.importante) return false;
     if (filtros.riesgo && !riesgo.has(c.id)) return false;
     if (filtros.cobro && !tieneCobro(c)) return false;
+    if (filtros.completar && !faltaPorConfigurar(c)[filtros.completar === 'importante' ? 'importante' : 'todo'].length) return false;
     return coincideBusqueda(c, filtros.texto);
   }).sort((a, b) => compararEs(a.nombreComercial, b.nombreComercial));
 }
 
 function numFiltros() {
   return ['dia', 'zona', 'poblacion'].filter((k) => filtros[k]).length +
-    (filtros.estado !== 'sin_baja' ? 1 : 0) + (filtros.importantes ? 1 : 0) + (filtros.riesgo ? 1 : 0) + (filtros.cobro ? 1 : 0);
+    (filtros.estado !== 'sin_baja' ? 1 : 0) + (filtros.importantes ? 1 : 0) + (filtros.riesgo ? 1 : 0) + (filtros.cobro ? 1 : 0) +
+    (filtros.completar ? 1 : 0);
 }
 
 export function render(cont, ctx) {
@@ -64,7 +78,13 @@ export function render(cont, ctx) {
 
   const chip = (texto, activo, fn) => h('button', { class: 'chip-filtro' + (activo ? ' activo' : ''), onClick: fn }, texto);
   const nf = numFiltros();
+  const vivos = todos.filter((c) => estadoEnFecha(c, fecha) !== 'baja');
+  const nCompletar = vivos.filter((c) => faltaPorConfigurar(c).todo.length).length;
+  const nImportante = vivos.filter((c) => faltaPorConfigurar(c).importante.length).length;
   const chips = h('div', { class: 'chips' },
+    filtros.completar === 'importante'
+      ? chip(`Sin teléfono o sin día (${nImportante})`, true, () => { filtros.completar = ''; mostrar = LIMITE; ctx.refrescar(); })
+      : chip(`Por completar (${nCompletar})`, filtros.completar === 'todo', () => { filtros.completar = filtros.completar ? '' : 'todo'; mostrar = LIMITE; ctx.refrescar(); }),
     chip('Sin día asignado', filtros.dia === 'sin', () => { filtros.dia = filtros.dia === 'sin' ? '' : 'sin'; mostrar = LIMITE; ctx.refrescar(); }),
     chip('★ Importantes', filtros.importantes, () => { filtros.importantes = !filtros.importantes; mostrar = LIMITE; ctx.refrescar(); }),
     chip(`En riesgo (${riesgo.size})`, filtros.riesgo, () => { filtros.riesgo = !filtros.riesgo; mostrar = LIMITE; ctx.refrescar(); }),
@@ -104,6 +124,8 @@ export function render(cont, ctx) {
     barraSel, filas, pie].filter(Boolean));
 }
 
+const sinTelefono = (c) => !(c.telefonos || []).length;
+
 function filaCliente(c, fecha, ctx, semanasRiesgo) {
   const est = estadoEnFecha(c, fecha);
   const dias = (c.diasLlamada || []).map((d) => DIAS_LETRA[d]).join(' ');
@@ -117,10 +139,12 @@ function filaCliente(c, fecha, ctx, semanasRiesgo) {
   seleccionando ? h('span', { class: 'casilla' + (sel ? ' marcada' : ''), 'aria-hidden': 'true' }, sel ? '✓' : '') : null,
   h('span', { class: 'fc-texto' },
     h('span', { class: 'fc-nombre' }, (c.importante ? '★ ' : '') + c.nombreComercial),
-    h('span', { class: 'fc-sub' }, [c.poblacion, c.contacto].filter(Boolean).join(' · ') || ' ')),
+    h('span', { class: 'fc-sub' }, [c.poblacion, c.contacto].filter(Boolean).join(' · ') || ' '),
+    filtros.completar && est !== 'baja' ? h('span', { class: 'fc-falta' }, textoFalta(faltaPorConfigurar(c).todo)) : null),
   h('span', { class: 'fc-lado' },
     dias ? h('span', { class: 'fc-dias' }, dias) : h('span', { class: 'fc-dias vacio' }, 'Sin día'),
     est !== 'activo' ? h('span', { class: `chip est-${est}` }, NOMBRE_ESTADO[est]) : null,
+    sinTelefono(c) && est !== 'baja' ? h('span', { class: 'chip est-sintel' }, 'Sin teléfono') : null,
     semanasRiesgo != null ? h('span', { class: 'chip est-riesgo' }, `${semanasRiesgo} sem. sin pedir`) : null,
     tieneCobro(c) ? h('span', { class: 'chip est-cobro' }, formatearImporte(c.pendienteCobro.importe)) : null));
 }

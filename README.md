@@ -6,7 +6,7 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - Los datos se guardan **solo en el móvil**. No hay servidor ni nube.
 - **Los datos de clientes nunca están en el código ni se suben a GitHub.** Se cargan en el móvil con el botón «Importar».
 
-**Estado:** las tres fases terminadas: 1 (Llamadas), 2 (Seguimiento) y 3 (Oficina). Versión 1.2.0.
+**Estado:** fases 1 (Llamadas), 2 (Seguimiento), 3 (Oficina) y 4 (Ficha completa) terminadas. Versión 1.3.0.
 
 **Qué hace la fase 2:**
 - **Registrar pedido** (ficha o menú ⋯): pedidos que llegan fuera de su día (llamó el cliente, WhatsApp o visita). Ese cliente ya no sale para llamar el resto de la semana.
@@ -21,6 +21,14 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - **Cambios para ICG** (Más): los datos de clientes que el comercial ha cambiado en la app (teléfono, contacto, forma de pago…), con el antes y el después, para actualizarlos en ICG. Se exportan a Excel. Al enviar el resumen se marcan solos como enviados, con la opción de deshacer.
 - **Promociones:** botón **Promos** en Hoy, con buscador. Se cargan desde **Más → Importar promociones (Excel)**. Cada importación sustituye a las anteriores. Las caducadas no se ven y las que aún no han empezado salen al final, más claras.
 - **Exportar historial** (Más): todas las llamadas y pedidos en un Excel.
+
+**Qué hace la fase 4:**
+- **Varios teléfonos con nombre:** en la ficha, cada teléfono lleva un nombre (Jefe, Pedidos, Bar…) y para qué sirve: «Llamar y WhatsApp», «Solo llamar» o «Solo WhatsApp». Al pulsar Llamar o WhatsApp, si solo hay uno que sirva, se abre directo; si hay varios, la app pregunta mostrando el nombre de cada uno.
+- **Obligatorio al crear un cliente:** nombre y teléfono. Si no tiene día de llamada, la app avisa de que no saldrá en Hoy.
+- **Falta por configurar:** la ficha avisa de lo que le falta (teléfono, día, contacto, población, nombre fiscal, forma de pago) y cada dato lleva a su campo. En Clientes, el filtro «Por completar» y la etiqueta «Sin teléfono». En Hoy, un aviso con los clientes sin teléfono o sin día (se puede ocultar ese día).
+- **Condiciones especiales:** descuentos o precios solo para un cliente (producto, condición, hasta cuándo y nota). Salen en su tarjeta de Hoy y al apuntar sus pedidos; las caducadas dejan de salir. La oficina las ve en el resumen del viernes («Condiciones nuevas») y en la hoja «Condiciones» del Excel semanal. Las promociones para todos siguen en «Promos».
+- **Repetir último pedido:** al apuntar un pedido, un botón copia el último que hizo ese cliente.
+- **Llamar a partir de:** una hora por cliente (por ejemplo, «el jefe llega a las 11»). Hasta esa hora, el cliente sale más abajo en Hoy.
 
 ---
 
@@ -111,12 +119,15 @@ Funciona sin conexión. Solo hace falta internet para enviar WhatsApps.
 **Si se importa otra vez** (por ejemplo, con el Excel actualizado):
 - los clientes se emparejan por su **ID** (C001, C002…);
 - se actualizan los datos que vienen en el Excel, pero **una celda vacía no borra** lo que el comercial haya puesto en la app (por ejemplo, los días asignados);
+- los **teléfonos nuevos del Excel se añaden** a los que ya tiene el móvil: no se pierde el que haya apuntado el comercial, ni su nombre;
 - se conservan el estado, el historial, las vacaciones y los cambios hechos en la app;
 - los clientes que no estén en el archivo **no se borran**.
 
 **Reglas al importar:**
 - Si «Día que cierra» o «Forma de pago» dice exactamente `CERRADO`, el cliente entra como **baja** con el motivo «Cerrado (según Excel)».
 - Las columnas que la app no conoce se ignoran.
+- Si el Excel trae las columnas **«Teléfonos con nombre»** o **«Llamar a partir de»** (las pone la propia app al exportar), también se leen. Así, exportar los clientes y volver a importarlos no pierde nada.
+- Las condiciones especiales, el estado, el historial y lo demás que solo existe en la app **no se importan desde Excel**: para pasar todo a otro móvil se usa la **copia de seguridad**.
 
 **Antes de importar:** corrige en el Excel la fila **C001** («JOSE PARSIFAL»), que tiene 11 teléfonos y un teléfono en «Población», y la **C004**, que tiene un email en «Población».
 
@@ -162,8 +173,8 @@ Los datos están en el móvil (IndexedDB), **no** en los archivos de la app. Act
 
 1. Haz los cambios en los archivos.
 2. Sube el número de versión en **dos sitios** (el mismo número en los dos):
-   - `js/version.js` → `export const VERSION = '1.2.0';`
-   - `sw.js` → `const VERSION = '1.2.0';`
+   - `js/version.js` → `export const VERSION = '1.3.0';`
+   - `sw.js` → `const VERSION = '1.3.0';`
 3. Si has añadido un archivo nuevo de la app, añádelo también a la lista `ARCHIVOS` de `sw.js`.
 4. Pasa los tests: `node --test`.
 5. En GitHub Desktop: comprueba que en **Changes** no hay datos de clientes, escribe un resumen, pulsa **Commit to main** y luego **Push origin**.

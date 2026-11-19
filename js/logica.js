@@ -269,10 +269,130 @@ export function clienteVacio() {
     codigo: '', nombreComercial: '', nombreFiscal: '', poblacion: '', zona: '', contacto: '',
     telefonos: [], diasLlamada: [], diasLlamadaDesde: null, diaCierre: '', formaPago: '',
     horaApertura: null, notas: '', pideHabitualmente: '', condiciones: '', pendienteCobro: null,
+    // Fase 4: nombre y uso de cada teléfono ({ '600111222': { nombre: 'Jefe', uso: 'llamar' } }),
+    // hora a partir de la que conviene llamar y condiciones especiales del cliente.
+    telefonosInfo: {}, llamarDesde: null, condicionesEspeciales: [],
     importante: false, estado: 'activo', vacacionesDesde: null, vacacionesHasta: null,
     saltarSemana: null, fechaBaja: null, motivoBaja: '', hojasOrigen: '', origenImportacion: null,
     borrado: false, fechaBorrado: null,
   };
+}
+
+/** Una condición especial del cliente (descuento, precio, regalo…). */
+export function condicionVacia() {
+  return { id: '', producto: '', condicion: '', hasta: null, nota: '', creada: null };
+}
+
+// ---------------------------------------------------------------------
+//  Teléfonos con nombre y uso
+// ---------------------------------------------------------------------
+
+/** Para qué sirve cada teléfono. 'todo' = llamar y WhatsApp. */
+export const USOS_TELEFONO = { todo: 'Llamar y WhatsApp', llamar: 'Solo llamar', whatsapp: 'Solo WhatsApp' };
+export const NOMBRES_TELEFONO = ['Jefe', 'Encargado', 'Pedidos', 'Bar', 'Cocina', 'Fijo', 'Móvil', 'Oficina'];
+
+/** Teléfonos del cliente con su nombre y uso, en el orden guardado. */
+export function telefonosDe(c) {
+  const info = c?.telefonosInfo || {};
+  return (c?.telefonos || []).map((numero) => ({
+    numero,
+    nombre: info[numero]?.nombre || '',
+    uso: USOS_TELEFONO[info[numero]?.uso] ? info[numero].uso : 'todo',
+  }));
+}
+
+/** Teléfonos que sirven para 'llamar' o para 'whatsapp'. Si ninguno está marcado
+ *  para eso, se devuelven todos (para no dejar al comercial sin poder llamar). */
+export function telefonosPara(c, para) {
+  const todos = telefonosDe(c);
+  const vale = todos.filter((t) => t.uso === 'todo' || t.uso === para);
+  return vale.length ? vale : todos;
+}
+
+/** 'Jefe · 600 111 222' o '600 111 222' */
+export function textoTelefono(t) {
+  return t.nombre ? `${t.nombre} · ${formatearTelefono(t.numero)}` : formatearTelefono(t.numero);
+}
+
+/** Para el Excel: 'Jefe: 600 111 222 (solo llamar); 965 000 000' */
+export function telefonosConNombre(c) {
+  return telefonosDe(c).map((t) =>
+    `${t.nombre ? t.nombre + ': ' : ''}${formatearTelefono(t.numero)}${t.uso !== 'todo' ? ` (${USOS_TELEFONO[t.uso].toLowerCase()})` : ''}`).join('; ');
+}
+
+/** Lee la columna «Teléfonos con nombre» del Excel → { telefonos, info } */
+export function leerTelefonosConNombre(texto) {
+  const telefonos = [];
+  const info = {};
+  for (const trozo of String(texto ?? '').split(/[;\n]+/)) {
+    const s = trozo.trim();
+    if (!s) continue;
+    const m = s.match(/^([^:\d+]*[^:\d\s+][^:\d+]*):\s*(.*)$/);
+    const nombre = m ? m[1].trim() : '';
+    let resto = m ? m[2] : s;
+    const n = normalizarTexto(resto);
+    const uso = /SOLO LLAMAR/.test(n) ? 'llamar' : /SOLO WHATSAPP/.test(n) ? 'whatsapp' : 'todo';
+    resto = resto.replace(/\(.*?\)/g, ' ');
+    const [numero] = extraerTelefonos(resto);
+    if (!numero || telefonos.includes(numero)) continue;
+    telefonos.push(numero);
+    if (nombre || uso !== 'todo') info[numero] = { nombre, uso };
+  }
+  return { telefonos, info };
+}
+
+// ---------------------------------------------------------------------
+//  Datos por completar
+// ---------------------------------------------------------------------
+
+/** Qué le falta a la ficha. Lo «importante» impide trabajar con el cliente
+ *  (sin teléfono no se le puede llamar; sin día no sale en la lista). */
+export function faltaPorConfigurar(c) {
+  if (!c || c.estado === 'baja') return { importante: [], resto: [], todo: [] };
+  const importante = [];
+  const resto = [];
+  if (!(c.telefonos || []).length) importante.push('telefonos');
+  if (!(c.diasLlamada || []).length) importante.push('diasLlamada');
+  if (!c.contacto) resto.push('contacto');
+  if (!c.poblacion) resto.push('poblacion');
+  if (c.estado !== 'potencial') {
+    if (!c.nombreFiscal) resto.push('nombreFiscal');
+    if (!c.formaPago) resto.push('formaPago');
+  }
+  return { importante, resto, todo: [...importante, ...resto] };
+}
+
+export const NOMBRE_DATO = {
+  telefonos: 'teléfono', diasLlamada: 'día de llamada', contacto: 'contacto', poblacion: 'población',
+  nombreFiscal: 'nombre fiscal', formaPago: 'forma de pago',
+};
+
+/** 'Falta: teléfono, día de llamada' */
+export function textoFalta(campos) {
+  return campos.length ? 'Falta: ' + campos.map((k) => NOMBRE_DATO[k] || k).join(', ') : '';
+}
+
+// ---------------------------------------------------------------------
+//  Condiciones especiales del cliente
+// ---------------------------------------------------------------------
+
+/** Las que siguen vigentes en esa fecha (sin «hasta» o con «hasta» >= fecha). */
+export function condicionesVigentes(c, fecha) {
+  return (c?.condicionesEspeciales || []).filter((x) => !x.hasta || !fecha || x.hasta >= fecha);
+}
+
+/** 'Xoringer: −10 % (hasta 31/12)' */
+export function textoCondicion(x, { conHasta = true } = {}) {
+  const base = [x.producto, x.condicion].filter(Boolean).join(': ');
+  return base + (conHasta && x.hasta ? ` (hasta el ${fechaCorta(x.hasta)})` : '');
+}
+
+/** El último pedido con texto de un cliente, anterior a `antesDe` (fecha), o null. */
+export function ultimoPedidoConTexto(llamadasCliente, antesDe = null) {
+  return [...llamadasCliente]
+    .filter((r) => !r.borrado && r.resultado === 'pide' && r.pedido && r.pedido.trim() && (!antesDe || (r.fecha || r.fechaPrevista) < antesDe))
+    .sort((a, b) => (b.fecha || b.fechaPrevista || '').localeCompare(a.fecha || a.fechaPrevista || '') ||
+      String(b.modificado || '').localeCompare(String(a.modificado || '')))[0] || null;
 }
 
 export function registroVacio() {
@@ -306,7 +426,7 @@ export function ajustesVacios() {
     id: 'ajustes', nombreComercial: '', whatsappOficina: '', contactoIvan: '',
     plantillas: { noContesta: PLANTILLA_NO_CONTESTA },
     semanasRiesgo: 3, primerUso: null, ultimaCopia: null, ultimoResumen: null, resumenesEnviados: [],
-    avisoSemanaPasadaCerrado: null,
+    avisoSemanaPasadaCerrado: null, avisoCompletarCerrado: null,
   };
 }
 
@@ -551,8 +671,15 @@ function compararTexto(a, b) {
   return String(a || '').localeCompare(String(b || ''), 'es', { sensitivity: 'base' });
 }
 
+/** Hora a partir de la que se le puede llamar: la más tardía entre la apertura y «llamar a partir de». */
+export function horaParaLlamar(c) {
+  const hs = [c.horaApertura, c.llamarDesde].filter(Boolean).sort();
+  return hs[hs.length - 1] || null;
+}
+
 function crearItem(c, reg, fechaPrevista, { fecha, hora, pendienteDe = [], riesgo = null, recordatorios = [] }) {
-  const abierto = !c.horaApertura || hora >= c.horaApertura;
+  const desde = horaParaLlamar(c);
+  const abierto = !desde || hora >= desde;
   const noContesta = reg?.resultado === 'no_contesta';
   const volver = reg?.volverALlamarDesde || null;
   const volverCumplido = !!volver && hora >= volver;
@@ -573,7 +700,14 @@ function crearItem(c, reg, fechaPrevista, { fecha, hora, pendienteDe = [], riesg
       : { tipo: 'tarde', texto: `Volver a llamar a las ${volver}` });
   }
   if (hoyCierra(c, fecha)) etiquetas.push({ tipo: 'aviso', texto: 'Hoy cierra' });
-  if (!abierto) etiquetas.push({ tipo: 'info', texto: `Abre a las ${c.horaApertura}` });
+  if (!abierto) {
+    etiquetas.push({ tipo: 'info', texto: desde === c.horaApertura ? `Abre a las ${desde}` : `Llamar a partir de las ${desde}` });
+  }
+  const conds = condicionesVigentes(c, fecha);
+  if (conds.length) {
+    const primera = [conds[0].producto, conds[0].condicion].filter(Boolean).join(' ');
+    etiquetas.push({ tipo: 'condicion', texto: `Condiciones: ${primera}` + (conds.length > 1 ? ` (+${conds.length - 1})` : '') });
+  }
   if (nc.veces) {
     etiquetas.push({
       tipo: 'nocontesta',
@@ -768,8 +902,8 @@ function primerNombre(s) {
 export function mensajePedido({ cliente, pedido, comercial, fecha, hora }) {
   const pob = cliente.poblacion ? ` (${capitalizar(cliente.poblacion)})` : '';
   const lineas = [`PEDIDO · ${capitalizar(cliente.nombreComercial)}${pob}`];
-  const tel = cliente.telefonos?.[0];
-  const partes = [cliente.contacto ? capitalizar(cliente.contacto) : '', tel ? formatearTelefono(tel) : ''].filter(Boolean);
+  const tel = telefonosPara(cliente, 'llamar')[0];
+  const partes = [cliente.contacto ? capitalizar(cliente.contacto) : '', tel ? textoTelefono(tel) : ''].filter(Boolean);
   if (partes.length) lineas.push(`Contacto: ${partes.join(' · ')}`);
   if (pedido && pedido.trim()) lineas.push(pedido.trim());
   lineas.push(`— ${comercial || 'Comercial'}, ${DIAS[diaSemana(fecha)]} ${fechaCorta(fecha)} ${hora}`);
@@ -851,7 +985,8 @@ export function coincidePromo(p, consulta) {
 // ---------------------------------------------------------------------
 
 export function textoBusqueda(c) {
-  return normalizarTexto([c.nombreComercial, c.nombreFiscal, c.poblacion, c.contacto, c.codigo].join(' ')) +
+  return normalizarTexto([c.nombreComercial, c.nombreFiscal, c.poblacion, c.contacto, c.codigo,
+    ...Object.values(c.telefonosInfo || {}).map((i) => i.nombre)].join(' ')) +
     ' ' + (c.telefonos || []).join(' ');
 }
 

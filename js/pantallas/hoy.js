@@ -9,8 +9,10 @@ import { abrirPromos, numPromosVigentes, abrirResumen, resumenPorEnviar } from '
 import {
   calcularListaDia, calcularSemana, fechaLarga, fechaDeMarca, diasEntre, formatearTelefono,
   sumarDias, lunesDe, DIAS, NOMBRE_SITUACION, analizarCierre, fechaCorta, diaSemana, capitalizarPrimera,
-  ORIGENES_PEDIDO, formatearImporte,
+  ORIGENES_PEDIDO, formatearImporte, telefonosDe, textoTelefono, USOS_TELEFONO, condicionesVigentes, textoCondicion,
+  faltaPorConfigurar, estadoEnFecha,
 } from '../logica.js';
+import { verPorCompletar } from './clientes.js';
 import { h } from '../ui.js';
 
 const desplegadas = new Set();
@@ -95,6 +97,23 @@ function avisos(ctx, aj, clientes, lista, fecha) {
         h('button', { class: 'btn btn-principal btn-peq', onClick: () => exportarYAvisar(ctx) }, 'Hacer copia')));
     }
   }
+  // Clientes con los que no se puede trabajar: sin teléfono o sin día de llamada
+  if (clientes.length && aj.avisoCompletarCerrado !== fecha) {
+    const vivos = clientes.filter((c) => estadoEnFecha(c, fecha) !== 'baja');
+    const n = vivos.filter((c) => faltaPorConfigurar(c).importante.length).length;
+    if (n) {
+      out.push(h('div', { class: 'aviso aviso-completar' },
+        h('p', {}, n === 1
+          ? 'Tienes 1 cliente sin teléfono o sin día de llamada. Sin día no te sale para llamar.'
+          : `Tienes ${n} clientes sin teléfono o sin día de llamada. Sin día no te salen para llamar.`),
+        h('div', { class: 'fila-botones' },
+          h('button', { class: 'btn btn-principal btn-peq', onClick: () => { verPorCompletar(true); ctx.irA('clientes'); } }, 'Completar'),
+          h('button', {
+            class: 'btn btn-secundario btn-peq',
+            onClick: async () => { await datos.guardarAjustes({ avisoCompletarCerrado: fecha }); ctx.refrescar(); },
+          }, 'Ocultar hoy'))));
+    }
+  }
   // Lunes: los que quedaron sin llamar la semana pasada
   if (lista.semanaPasadaSinLlamar.length && aj.avisoSemanaPasadaCerrado !== lista.lunes) {
     const n = lista.semanaPasadaSinLlamar.length;
@@ -168,17 +187,20 @@ function tarjeta(it, fecha, gris = false) {
   return art;
 }
 
-export function detalleCliente(c) {
+export function detalleCliente(c, fecha = null) {
   const fila = (k, v) => (v ? h('div', { class: 'det-fila' }, h('dt', {}, k), h('dd', {}, v)) : null);
   const cierre = analizarCierre(c.diaCierre);
+  const conds = condicionesVigentes(c, fecha);
   return [h('dl', { class: 'det' },
-    fila('Teléfonos', (c.telefonos || []).map(formatearTelefono).join(' · ')),
+    fila('Teléfonos', telefonosDe(c).map((t) => textoTelefono(t) + (t.uso !== 'todo' ? ` (${USOS_TELEFONO[t.uso].toLowerCase()})` : '')).join('\n')),
+    fila('Condiciones especiales', conds.map((x) => textoCondicion(x) + (x.nota ? ` · ${x.nota}` : '')).join('\n')),
     fila('Abre a las', c.horaApertura),
+    fila('Llamar a partir de', c.llamarDesde),
     fila('Cierra', c.diaCierre ? c.diaCierre + (cierre.tipo === 'otro' ? ' (texto libre)' : '') : ''),
     fila('Zona', c.zona),
     fila('Nombre fiscal', c.nombreFiscal),
     fila('Pide habitualmente', c.pideHabitualmente),
-    fila('Condiciones', c.condiciones),
+    fila('Otras condiciones', c.condiciones),
     c.pendienteCobro && Number(c.pendienteCobro.importe) > 0
       ? fila('Cobro pendiente', formatearImporte(c.pendienteCobro.importe) + (c.pendienteCobro.nota ? ' · ' + c.pendienteCobro.nota : '')) : null,
     fila('Notas', c.notas))];

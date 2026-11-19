@@ -124,7 +124,7 @@ test('Excel semanal: hojas fijas, cada fila con comercial, semana, código y cli
   const e = semanaEjemplo();
   const d = datosSemana({ ...e, lunes: L, fecha: V, primerUso: '2026-01-01' });
   const hojas = hojasExcelSemanal(d, 'Juan Bonilla');
-  assert.deepEqual(Object.keys(hojas), ['Resumen', 'Llamadas', 'Pedidos', 'Clientes', 'Cambios ICG', 'Recordatorios']);
+  assert.deepEqual(Object.keys(hojas), ['Resumen', 'Llamadas', 'Pedidos', 'Clientes', 'Condiciones', 'Cambios ICG', 'Recordatorios']);
   for (const [nombre, filas] of Object.entries(hojas)) {
     assert.deepEqual(filas[0], [...COLUMNAS_COMUNES, ...COLUMNAS_EXCEL_SEMANAL[nombre]], `cabecera de ${nombre}`);
     for (const f of filas.slice(1)) {

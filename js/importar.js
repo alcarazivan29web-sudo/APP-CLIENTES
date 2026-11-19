@@ -6,6 +6,7 @@
 
 import {
   normalizarTexto, analizarDias, analizarHora, extraerTelefonos, clienteVacio, analizarFecha, promocionVacia,
+  leerTelefonosConNombre,
 } from './logica.js';
 
 /** Columnas conocidas del Excel → campo de la app. Las demás se ignoran. */
@@ -18,6 +19,8 @@ export const COLUMNAS_CLIENTES = {
   contacto: ['CONTACTO', 'PERSONA DE CONTACTO'],
   telefono1: ['TELEFONO', 'TELEFONO 1', 'TEL', 'MOVIL'],
   telefono2: ['TELEFONO 2', 'TEL 2', 'OTROS TELEFONOS'],
+  telefonosConNombre: ['TELEFONOS CON NOMBRE'],
+  llamarDesde: ['LLAMAR A PARTIR DE', 'LLAMAR DESDE', 'MEJOR HORA PARA LLAMAR'],
   diasLlamada: ['DIAS DE LLAMADA', 'DIA DE LLAMADA', 'DIAS LLAMADA', 'DIAS'],
   diaCierre: ['DIA QUE CIERRA', 'CIERRA', 'DIA DE CIERRE', 'CIERRE'],
   formaPago: ['FORMA DE PAGO', 'PAGO'],
@@ -28,7 +31,7 @@ export const COLUMNAS_CLIENTES = {
 
 /** Campos que vienen del Excel y que una nueva importación puede actualizar. */
 export const CAMPOS_EXCEL = ['codigo', 'nombreComercial', 'nombreFiscal', 'poblacion', 'zona', 'contacto',
-  'telefonos', 'diasLlamada', 'diaCierre', 'formaPago', 'horaApertura', 'notas', 'hojasOrigen'];
+  'telefonos', 'telefonosInfo', 'diasLlamada', 'diaCierre', 'formaPago', 'horaApertura', 'llamarDesde', 'notas', 'hojasOrigen'];
 
 function mapaCabeceras(cabecera) {
   const mapa = {};
@@ -44,7 +47,8 @@ function mapaCabeceras(cabecera) {
 }
 
 const texto = (v) => (v == null ? '' : String(v).trim());
-const vacio = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 0);
+const vacio = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 0) ||
+  (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
 
 /** Convierte las filas de la hoja (array de arrays, la primera es la cabecera)
  *  en datos de cliente. No guarda nada. */
@@ -60,7 +64,8 @@ export function filasAClientes(filas) {
   }
   const col = (fila, campo) => (mapa[campo] === undefined ? undefined : fila[mapa[campo]]);
   const columnas = new Set(Object.keys(mapa));
-  if (columnas.has('telefono1') || columnas.has('telefono2')) columnas.add('telefonos');
+  if (columnas.has('telefono1') || columnas.has('telefono2') || columnas.has('telefonosConNombre')) columnas.add('telefonos');
+  if (columnas.has('telefonosConNombre')) columnas.add('telefonosInfo');
 
   const clientes = [];
   const vistos = new Map();
@@ -76,6 +81,13 @@ export function filasAClientes(filas) {
     const horaTxt = col(f, 'horaApertura');
     const hora = analizarHora(horaTxt);
     if (texto(horaTxt) && !hora) avisos.push(`Fila ${nFila} (${nombre}): no entiendo la hora de apertura «${texto(horaTxt)}».`);
+    const llamarTxt = col(f, 'llamarDesde');
+    const llamarDesde = analizarHora(llamarTxt);
+    if (texto(llamarTxt) && !llamarDesde) avisos.push(`Fila ${nFila} (${nombre}): no entiendo la hora «${texto(llamarTxt)}» de «Llamar a partir de».`);
+    // «Teléfonos con nombre» (lo escribe la propia app al exportar) añade nombres y uso
+    const conNombre = leerTelefonosConNombre(col(f, 'telefonosConNombre'));
+    const telefonos = extraerTelefonos(col(f, 'telefono1'), col(f, 'telefono2'));
+    for (const t of conNombre.telefonos) if (!telefonos.includes(t)) telefonos.push(t);
     const c = {
       codigo: texto(col(f, 'codigo')),
       nombreComercial: nombre,
@@ -83,11 +95,13 @@ export function filasAClientes(filas) {
       poblacion: texto(col(f, 'poblacion')),
       zona: texto(col(f, 'zona')),
       contacto: texto(col(f, 'contacto')),
-      telefonos: extraerTelefonos(col(f, 'telefono1'), col(f, 'telefono2')),
+      telefonos,
+      telefonosInfo: conNombre.info,
       diasLlamada: dias.dias,
       diaCierre: texto(col(f, 'diaCierre')),
       formaPago: texto(col(f, 'formaPago')),
       horaApertura: hora,
+      llamarDesde,
       notas: texto(col(f, 'notas')),
       hojasOrigen: texto(col(f, 'hojasOrigen')),
       _fila: nFila,
@@ -118,6 +132,7 @@ export function marcadoCerrado(c) {
  *  - Empareja por código (o, si no hay código, por nombre + población).
  *  - Actualiza los datos que vienen en el Excel; una celda VACÍA no borra
  *    un dato que ya exista en la app (por ejemplo, los días asignados).
+ *  - Los teléfonos nuevos del Excel se añaden a los que ya tiene el móvil.
  *  - Conserva estado, historial, vacaciones y campos que solo están en la app.
  *  - Los clientes que no vienen en el archivo no se tocan. */
 export function planificarImportacion(delArchivo, existentes, { fecha, archivo = '', columnas = null } = {}) {
@@ -162,8 +177,13 @@ export function planificarImportacion(delArchivo, existentes, { fecha, archivo =
     const cambios = {};
     for (const k of CAMPOS_EXCEL) {
       if (k === 'telefonos' ? !cols.has('telefonos') : !cols.has(k)) continue;
-      const nuevo = d[k];
+      let nuevo = d[k];
       if (vacio(nuevo)) continue; // una celda vacía no borra datos de la app
+      // Los nombres de teléfono se suman a los que ya tenga la app
+      if (k === 'telefonosInfo') nuevo = { ...(existente.telefonosInfo || {}), ...nuevo };
+      // Los teléfonos del Excel se AÑADEN a los del móvil (no se pierde el que haya
+      // apuntado el comercial). Para quitar uno, se borra en la ficha.
+      if (k === 'telefonos') nuevo = [...(existente.telefonos || []), ...nuevo.filter((t) => !(existente.telefonos || []).includes(t))];
       if (JSON.stringify(nuevo) !== JSON.stringify(existente[k] ?? null)) cambios[k] = nuevo;
     }
     if (cambios.diasLlamada) cambios.diasLlamadaDesde = fecha;

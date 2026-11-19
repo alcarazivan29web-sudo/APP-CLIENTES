@@ -8,8 +8,9 @@ import {
   clienteVacio, extraerTelefonos, formatearTelefono, estadoEnFecha, fechaNormal, DIAS,
   NOMBRE_SITUACION, horaDeMarca, capitalizarPrimera, diaSemana, analizarHora, lunesDe,
   ORIGENES_PEDIDO, calcularRiesgo, textoRiesgo, fechaCorta, formatearImporte,
+  telefonosDe, USOS_TELEFONO, NOMBRES_TELEFONO, faltaPorConfigurar, NOMBRE_DATO, condicionVacia, textoCondicion,
 } from '../logica.js';
-import { h, pantallaCompleta, confirmar, toast, selectorDias } from '../ui.js';
+import { h, hoja, pantallaCompleta, confirmar, toast, selectorDias } from '../ui.js';
 
 /** id: cliente a abrir; sin id, cliente nuevo. opciones.potencial: el nuevo empieza como potencial. */
 export function abrirFicha(ctx, id, { potencial = false } = {}) {
@@ -44,16 +45,16 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
     nombreComercial: campo('Nombre comercial *', c.nombreComercial),
     poblacion: campo('Población', c.poblacion),
     contacto: campo('Contacto', c.contacto),
-    telefonos: campo('Teléfonos (uno por línea)', (c.telefonos || []).map(formatearTelefono).join('\n'), { multilinea: true, filas: 2 }),
     diaCierre: campo('Día que cierra', c.diaCierre),
     formaPago: campo('Forma de pago', c.formaPago),
     horaApertura: campo('Hora de apertura', c.horaApertura || '', { tipo: 'time' }),
+    llamarDesde: campo('Llamar a partir de', c.llamarDesde || '', { tipo: 'time' }),
     notas: campo('Notas', c.notas, { multilinea: true, filas: 4 }),
     nombreFiscal: campo('Nombre fiscal', c.nombreFiscal),
     zona: campo('Zona / ruta', c.zona),
     codigo: campo('Código (ID del Excel)', c.codigo),
     pideHabitualmente: campo('Pide habitualmente', c.pideHabitualmente, { multilinea: true, filas: 2 }),
-    condiciones: campo('Condiciones (descuentos, precios especiales)', c.condiciones, { multilinea: true, filas: 2 }),
+    condiciones: campo('Otras condiciones (texto libre)', c.condiciones, { multilinea: true, filas: 2 }),
     cobroImporte: campo('Cobro (€)', c.pendienteCobro?.importe != null
       ? formatearImporte(c.pendienteCobro.importe).replace(' €', '') : '', { inputmode: 'decimal' }),
     cobroNota: campo('Nota del cobro', c.pendienteCobro?.nota || ''),
@@ -61,6 +62,7 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
   f.cobroImporte.el.placeholder = 'Importe €';
   f.cobroNota.el.placeholder = 'Nota (ej.: factura 45)';
   const dias = selectorDias(c.diasLlamada || []);
+  const tels = editorTelefonos(telefonosDe(c));
   const importante = h('input', { type: 'checkbox', checked: !!c.importante });
   // En un cliente nuevo se elige si es cliente o potencial
   let tipoNuevo = c.estado === 'potencial' ? 'potencial' : 'activo';
@@ -72,7 +74,19 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
   const guardar = async () => {
     const nombre = f.nombreComercial.el.value.trim();
     if (!nombre) { toast('El nombre comercial es obligatorio'); f.nombreComercial.el.focus(); return; }
+    const telefonos = tels.valor();
+    if (tels.hayErrores()) { toast('Hay un teléfono que no se entiende. Revísalo (9 cifras, o con + delante si es extranjero).'); return; }
+    if (!telefonos.telefonos.length && (esNuevo || (c.telefonos || []).length)) {
+      toast('El teléfono es obligatorio');
+      tels.enfocar();
+      return;
+    }
     const nuevosDias = dias.valor();
+    if (esNuevo && !nuevosDias.length) {
+      const seguir = await confirmar('No le has puesto día de llamada: no te saldrá en la lista de Hoy hasta que se lo pongas.',
+        { ok: 'Guardar sin día', cancelar: 'Poner día', titulo: 'Sin día de llamada' });
+      if (!seguir) { dias.el.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    }
     const importeTxt = f.cobroImporte.el.value.trim().replace(/[€\s]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
     const importe = importeTxt ? Number(importeTxt) : 0;
     if (importeTxt && (!isFinite(importe) || importe < 0)) { toast('El cobro pendiente tiene que ser un número, por ejemplo 120 o 85,50'); f.cobroImporte.el.focus(); return; }
@@ -82,10 +96,12 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
       nombreComercial: nombre,
       poblacion: f.poblacion.el.value.trim(),
       contacto: f.contacto.el.value.trim(),
-      telefonos: extraerTelefonos(f.telefonos.el.value.replace(/\n/g, ',')),
+      telefonos: telefonos.telefonos,
+      telefonosInfo: telefonos.info,
       diaCierre: f.diaCierre.el.value.trim(),
       formaPago: f.formaPago.el.value.trim(),
       horaApertura: analizarHora(f.horaApertura.el.value) || null,
+      llamarDesde: analizarHora(f.llamarDesde.el.value) || null,
       notas: f.notas.el.value.trim(),
       nombreFiscal: f.nombreFiscal.el.value.trim(),
       zona: f.zona.el.value.trim(),
@@ -136,6 +152,26 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
     h('button', { class: 'btn btn-secundario', onClick: () => acciones.registrarPedido(c) }, 'Registrar pedido'),
     h('button', { class: 'btn btn-secundario', onClick: () => acciones.editarRecordatorio({ cliente: c }) }, '+ Recordatorio'));
   const recordatorios = esNuevo ? null : seccionRecordatorios(c, fecha);
+  const condiciones = esNuevo ? null : seccionCondiciones(ctx, c, fecha, repintar);
+
+  // --- Lo que falta por configurar (cada dato lleva a su campo) ---
+  const masCampos = h('details', { class: 'mas-campos' }, h('summary', {}, 'Más datos'), f.nombreFiscal.grupo, f.zona.grupo, f.codigo.grupo,
+    c.hojasOrigen ? h('p', { class: 'texto-ayuda' }, `Hojas de origen: ${c.hojasOrigen}`) : null);
+  const irA = {
+    telefonos: () => tels.enfocar(),
+    diasLlamada: () => dias.el.scrollIntoView({ block: 'center', behavior: 'smooth' }),
+    contacto: () => f.contacto.el.focus(),
+    poblacion: () => f.poblacion.el.focus(),
+    formaPago: () => f.formaPago.el.focus(),
+    nombreFiscal: () => { masCampos.open = true; f.nombreFiscal.el.focus(); },
+  };
+  const falta = esNuevo ? null : faltaPorConfigurar(c);
+  const bloqueFalta = !falta?.todo.length ? null : h('section', { class: 'falta-config' + (falta.importante.length ? ' importante' : '') },
+    h('p', {}, h('strong', {}, 'Falta por configurar'),
+      falta.importante.includes('diasLlamada') ? ' · sin día de llamada no sale en Hoy' : ''),
+    h('div', { class: 'etiquetas' }, falta.todo.map((k) => h('button', {
+      type: 'button', class: 'chip-falta' + (falta.importante.includes(k) ? ' importante' : ''), onClick: () => irA[k]?.(),
+    }, NOMBRE_DATO[k]))));
 
   const historial = esNuevo ? null : seccionHistorial(c);
 
@@ -154,22 +190,25 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
   return h('div', { class: 'ficha' },
     h('h2', { class: 'ficha-nombre' }, c.nombreComercial || 'Nuevo cliente'),
     bloqueEstado,
+    bloqueFalta,
     contacto,
     otrasAcciones,
     recordatorios,
+    condiciones,
     h('section', { class: 'ficha-form' },
       selTipo ? h('div', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, '¿Es cliente o potencial?'), selTipo) : null,
       f.nombreComercial.grupo,
       h('label', { class: 'casilla-fila' }, importante, ' ★ Importante (sale el primero en la lista)'),
-      f.poblacion.grupo, f.contacto.grupo, f.telefonos.grupo,
+      f.poblacion.grupo, f.contacto.grupo,
+      h('div', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, 'Teléfonos *'), tels.el),
       h('div', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, 'Días de llamada'), dias.el),
-      f.diaCierre.grupo, f.formaPago.grupo, f.horaApertura.grupo,
+      f.diaCierre.grupo, f.formaPago.grupo,
+      h('div', { class: 'fila-campos dos' }, f.horaApertura.grupo, f.llamarDesde.grupo),
       f.pideHabitualmente.grupo, f.condiciones.grupo,
       h('div', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, 'Cobro pendiente'),
         h('div', { class: 'fila-campos' }, f.cobroImporte.el, f.cobroNota.el)),
       f.notas.grupo,
-      h('details', { class: 'mas-campos' }, h('summary', {}, 'Más datos'), f.nombreFiscal.grupo, f.zona.grupo, f.codigo.grupo,
-        c.hojasOrigen ? h('p', { class: 'texto-ayuda' }, `Hojas de origen: ${c.hojasOrigen}`) : null),
+      masCampos,
       h('button', { class: 'btn btn-principal btn-ancho btn-guardar', onClick: guardar }, esNuevo ? 'Añadir cliente' : 'Guardar cambios')),
     historial,
     borrar);
@@ -210,4 +249,163 @@ function seccionRecordatorios(c, fecha) {
     h('h3', {}, `Recordatorios (${pendientes.length})`),
     pendientes.map(fila),
     hechos.length ? h('details', {}, h('summary', {}, `Hechos (${hechos.length})`), hechos.slice(0, 30).map(fila)) : null);
+}
+
+// ---------------------------------------------------------------------
+//  Teléfonos: número + nombre + para qué sirve
+// ---------------------------------------------------------------------
+
+let idListaNombres = 0;
+
+/** Editor de teléfonos. valor() → { telefonos: ['600…'], info: { '600…': { nombre, uso } } } */
+function editorTelefonos(iniciales) {
+  const idLista = `nombres-tel-${++idListaNombres}`;
+  const lista = h('div', { class: 'lista-telefonos' });
+  const datalist = h('datalist', { id: idLista }, NOMBRES_TELEFONO.map((n) => h('option', { value: n })));
+  const filas = [];
+
+  const añadir = (t = { numero: '', nombre: '', uso: 'todo' }, enfocar = false) => {
+    const numero = h('input', {
+      class: 'campo tel-numero', type: 'tel', inputmode: 'tel', value: t.numero ? formatearTelefono(t.numero) : '',
+      placeholder: 'Teléfono', 'aria-label': 'Número de teléfono', autocomplete: 'off',
+    });
+    const nombre = h('input', {
+      class: 'campo tel-nombre', type: 'text', value: t.nombre || '', list: idLista,
+      placeholder: 'Nombre (Jefe, Pedidos…)', 'aria-label': 'Nombre del teléfono', autocomplete: 'off',
+    });
+    const uso = h('select', { class: 'campo tel-uso', 'aria-label': 'Para qué sirve' },
+      Object.entries(USOS_TELEFONO).map(([k, txt]) => h('option', { value: k, selected: k === t.uso }, txt)));
+    uso.value = t.uso || 'todo';
+    const fila = { numero, nombre, uso, el: null };
+    fila.el = h('div', { class: 'fila-telefono' },
+      numero,
+      h('button', {
+        type: 'button', class: 'btn-quitar', 'aria-label': 'Quitar este teléfono',
+        onClick: () => { filas.splice(filas.indexOf(fila), 1); fila.el.remove(); if (!filas.length) añadir(); },
+      }, '✕'),
+      nombre, uso);
+    filas.push(fila);
+    lista.append(fila.el);
+    if (enfocar) setTimeout(() => numero.focus(), 50);
+  };
+
+  (iniciales.length ? iniciales : [undefined]).forEach((t) => añadir(t));
+
+  const leer = () => filas.map((f) => ({
+    texto: f.numero.value.trim(), numeros: extraerTelefonos(f.numero.value), nombre: f.nombre.value.trim(), uso: f.uso.value, fila: f,
+  }));
+
+  return {
+    el: h('div', {}, lista, datalist,
+      h('button', { type: 'button', class: 'btn btn-texto btn-peq', onClick: () => añadir(undefined, true) }, '+ Añadir otro teléfono')),
+    valor() {
+      const telefonos = [];
+      const info = {};
+      for (const x of leer()) {
+        for (const n of x.numeros) {
+          if (telefonos.includes(n)) continue;
+          telefonos.push(n);
+          if (x.nombre || x.uso !== 'todo') info[n] = { nombre: x.nombre, uso: x.uso };
+        }
+      }
+      return { telefonos, info };
+    },
+    hayErrores() {
+      let mal = false;
+      for (const x of leer()) {
+        const error = !!x.texto && !x.numeros.length;
+        x.fila.numero.classList.toggle('campo-error', error);
+        if (error && !mal) { x.fila.numero.focus(); mal = true; }
+      }
+      return mal;
+    },
+    enfocar() { filas[0]?.numero.scrollIntoView({ block: 'center', behavior: 'smooth' }); filas[0]?.numero.focus(); },
+  };
+}
+
+// ---------------------------------------------------------------------
+//  Condiciones especiales del cliente
+// ---------------------------------------------------------------------
+
+function seccionCondiciones(ctx, c, fecha, repintar) {
+  const todas = c.condicionesEspeciales || [];
+  const vigentes = todas.filter((x) => !x.hasta || x.hasta >= fecha);
+  const caducadas = todas.filter((x) => x.hasta && x.hasta < fecha);
+  const fila = (x, caducada = false) => h('button', {
+    class: 'fila-condicion' + (caducada ? ' caducada' : ''), onClick: () => editarCondicion(ctx, c, x, repintar),
+  },
+  h('span', { class: 'fc-producto' }, x.producto || '(sin producto)'),
+  h('span', { class: 'fc-condicion' }, x.condicion || ''),
+  x.hasta || x.nota ? h('span', { class: 'fc-detalle' },
+    [x.hasta ? `${caducada ? 'Caducó' : 'Hasta'} el ${fechaNormal(x.hasta)}` : '', x.nota].filter(Boolean).join(' · ')) : null);
+  return h('section', { class: 'ficha-condiciones' },
+    h('div', { class: 'cabecera-fila' },
+      h('h3', {}, `Condiciones especiales (${vigentes.length})`),
+      h('button', { class: 'btn btn-secundario btn-peq', onClick: () => editarCondicion(ctx, c, null, repintar) }, '+ Añadir')),
+    vigentes.length ? vigentes.map((x) => fila(x)) : h('p', { class: 'texto-ayuda' },
+      'Descuentos o precios solo para este cliente. Salen al llamarle y al apuntar sus pedidos. Las promociones para todos están en «Promos».'),
+    caducadas.length ? h('details', {}, h('summary', {}, `Caducadas (${caducadas.length})`), caducadas.map((x) => fila(x, true))) : null);
+}
+
+const nuevoIdCondicion = () => (globalThis.crypto?.randomUUID?.() || `cond-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
+
+function editarCondicion(ctx, cliente, condicion, repintar) {
+  const { fecha } = ctx.reloj.ahoraFH();
+  const x = condicion || condicionVacia();
+  const productos = [...new Set(datos.obtenerPromociones().map((p) => p.producto).filter(Boolean))].sort();
+  const idLista = 'productos-promos';
+  const producto = h('input', { class: 'campo', type: 'text', value: x.producto, list: idLista, placeholder: 'Ej.: Xoringer, Muga Rosado, todo el vino…', autocomplete: 'off' });
+  const cond = h('input', { class: 'campo', type: 'text', value: x.condicion, placeholder: 'Ej.: −10 %, a 5,50 €, 6+1, portes gratis…', autocomplete: 'off' });
+  const hasta = h('input', { class: 'campo', type: 'date', value: x.hasta || '' });
+  const nota = h('textarea', { class: 'campo', rows: 2, placeholder: 'Nota (opcional)' }, x.nota || '');
+  const grupo = (etiqueta, el) => h('label', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, etiqueta), el);
+
+  const guardarLista = async (lista, texto) => {
+    const actual = datos.obtenerCliente(cliente.id);
+    await datos.guardarCliente({ ...actual, condicionesEspeciales: lista });
+    toast(texto);
+    repintar();
+  };
+
+  const p = hoja({
+    titulo: condicion ? 'Condición especial' : 'Nueva condición especial',
+    contenido: (cerrar) => h('div', {},
+      h('p', { class: 'texto-ayuda' }, `Solo para ${cliente.nombreComercial}. La oficina la verá en el resumen del viernes.`),
+      grupo('Producto', producto),
+      productos.length ? h('datalist', { id: idLista }, productos.map((n) => h('option', { value: n }))) : null,
+      grupo('Condición', cond),
+      grupo('Hasta (opcional; si no se pone, no caduca)', hasta),
+      grupo('Nota', nota),
+      h('div', { class: 'columna-botones' },
+        h('button', {
+          class: 'btn btn-principal btn-ancho',
+          onClick: async () => {
+            const nueva = {
+              ...x, producto: producto.value.trim(), condicion: cond.value.trim(),
+              hasta: hasta.value || null, nota: nota.value.trim(),
+            };
+            if (!nueva.producto && !nueva.condicion) { toast('Pon al menos el producto o la condición'); producto.focus(); return; }
+            if (nueva.hasta && nueva.hasta < fecha && !condicion) {
+              if (!await confirmar('La fecha «hasta» ya ha pasado: la condición saldrá como caducada. ¿Guardar igualmente?', { ok: 'Guardar' })) return;
+            }
+            const actual = datos.obtenerCliente(cliente.id)?.condicionesEspeciales || [];
+            const lista = condicion
+              ? actual.map((y) => (y.id === condicion.id ? nueva : y))
+              : [...actual, { ...nueva, id: nuevoIdCondicion(), creada: fecha }];
+            cerrar();
+            await guardarLista(lista, condicion ? 'Condición guardada' : 'Condición añadida');
+          },
+        }, 'Guardar'),
+        condicion ? h('button', {
+          class: 'btn btn-peligro-texto',
+          onClick: async () => {
+            cerrar();
+            const antes = datos.obtenerCliente(cliente.id)?.condicionesEspeciales || [];
+            await guardarLista(antes.filter((y) => y.id !== condicion.id), 'Condición borrada');
+          },
+        }, 'Borrar condición') : null,
+        h('button', { class: 'btn btn-texto', onClick: () => cerrar() }, 'Cancelar'))),
+  });
+  if (!condicion) setTimeout(() => producto.focus(), 250);
+  return p;
 }

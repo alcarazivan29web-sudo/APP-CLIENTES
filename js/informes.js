@@ -12,7 +12,7 @@ import {
   DIAS, DIAS_EXCEL, NOMBRE_ESTADO, NOMBRE_SITUACION, ORIGENES_PEDIDO,
   sumarDias, diasEntre, diaSemana, fechaCorta, fechaDeMarca, capitalizar, capitalizarPrimera,
   formatearTelefono, esFinal, calcularSemana, calcularRiesgo, ultimosPedidos,
-  recordatoriosDelDia, normalizarTexto,
+  recordatoriosDelDia, normalizarTexto, textoCondicion, faltaPorConfigurar, textoFalta,
 } from './logica.js';
 
 const dia3 = (f) => capitalizarPrimera(DIAS[diaSemana(f)]).slice(0, 3);
@@ -161,10 +161,15 @@ export function datosSemana({ clientes, llamadas, recordatorios = [], cambios = 
 
   const icg = cambiosParaICG({ cambios, clientes });
 
+  // Condiciones especiales que el comercial ha apuntado esta semana (para revisarlas en la oficina)
+  const condicionesNuevas = vivos.flatMap((c) => (c.condicionesEspeciales || [])
+    .filter((x) => enSemana(x.creada)).map((x) => ({ cliente: c, condicion: x })))
+    .sort((a, b) => compararTexto(a.cliente.nombreComercial, b.cliente.nombreComercial));
+
   return {
     lunes, viernes, domingo, fechaRef, terminada: fechaRef >= viernes, semana, pedidos, sinLlamar, riesgo,
     bajas, vacaciones, nuevosClientes, nuevosPotenciales, pasanACliente, potencialesLlamados,
-    recordatoriosPendientes, cambiosICG: icg.filas, idsCambiosICG: icg.ids,
+    recordatoriosPendientes, cambiosICG: icg.filas, idsCambiosICG: icg.ids, condicionesNuevas,
     // Para el Excel
     clientes: vivos, llamadas, recordatorios, mapaRiesgo, ultimos: ultimosPedidos(llamadas),
   };
@@ -219,6 +224,8 @@ export function textoResumenSemanal(d, comercial) {
   seccion('POTENCIALES LLAMADOS', d.potencialesLlamados, (it) => `${nombreYPueblo(it.cliente)} · ${NOMBRE_SITUACION[it.registro.resultado] || it.registro.resultado}`);
   seccion('RECORDATORIOS SIN HACER', d.recordatoriosPendientes, (x) =>
     `${fechaCorta(x.recordatorio.fecha)} · ${recortar(x.recordatorio.texto, 80)}${x.cliente ? ' · ' + capitalizar(x.cliente.nombreComercial) : ''}`);
+  seccion('CONDICIONES NUEVAS', d.condicionesNuevas || [], (x) =>
+    `${nombreYPueblo(x.cliente)} · ${textoCondicion(x.condicion)}${x.condicion.nota ? ' · ' + recortar(x.condicion.nota, 60) : ''}`, 40);
   seccion('CAMBIOS PARA ACTUALIZAR EN ICG', d.cambiosICG, (x) => x.tipo === 'nuevo'
     ? `NUEVO: ${capitalizar(x.cliente)}${x.codigo ? ' (' + x.codigo + ')' : ''}: ${x.despues}`
     : `${capitalizar(x.cliente)}${x.codigo ? ' (' + x.codigo + ')' : ''} · ${x.campo}: ${x.antes} → ${x.despues}`, 60);
@@ -235,7 +242,9 @@ export const COLUMNAS_EXCEL_SEMANAL = {
   Llamadas: ['Fecha prevista', 'Día', 'Población', 'Resultado', 'Cómo', 'Nº intentos', 'Hora último intento', 'WhatsApp enviado', 'Apuntado el'],
   Pedidos: ['Fecha', 'Hora', 'Población', 'Cómo llegó', 'Pedido', 'Enviado a oficina', 'Hora de envío'],
   Clientes: ['Nombre fiscal', 'Población', 'Zona', 'Contacto', 'Días de llamada', 'Estado', 'Importante', 'Último pedido',
-    'Semanas sin pedir', 'En riesgo', 'Cobro pendiente €', 'Nota del cobro', 'Pide habitualmente', 'Condiciones', 'Id interno'],
+    'Semanas sin pedir', 'En riesgo', 'Cobro pendiente €', 'Nota del cobro', 'Pide habitualmente', 'Condiciones',
+    'Llamar a partir de', 'Condiciones especiales', 'Falta por configurar', 'Id interno'],
+  Condiciones: ['Producto', 'Condición', 'Hasta', 'Nota', 'Apuntada el', 'Estado', 'Nueva esta semana'],
   'Cambios ICG': ['Fecha del cambio', 'Campo', 'Antes', 'Después', '¿Cliente nuevo?'],
   Recordatorios: ['Fecha', 'Texto', 'Estado', 'Hecho el'],
 };
@@ -295,8 +304,16 @@ export function hojasExcelSemanal(d, comercial) {
       return [...pre(c), c.nombreFiscal || '', c.poblacion || '', c.zona || '', c.contacto || '',
         (c.diasLlamada || []).map((x) => DIAS_EXCEL[x]).join(', '), NOMBRE_ESTADO[c.estado] || c.estado, c.importante ? 'Sí' : '',
         ultimo, ultimo ? Math.floor(diasEntre(ultimo, d.fechaRef) / 7) : '', d.mapaRiesgo.has(c.id) ? 'Sí' : '',
-        c.pendienteCobro?.importe ?? '', c.pendienteCobro?.nota || '', c.pideHabitualmente || '', c.condiciones || '', c.id];
+        c.pendienteCobro?.importe ?? '', c.pendienteCobro?.nota || '', c.pideHabitualmente || '', c.condiciones || '',
+        c.llamarDesde || '', (c.condicionesEspeciales || []).length || '',
+        textoFalta(faltaPorConfigurar(c).todo).replace(/^Falta: /, ''), c.id];
     }));
+
+  const enSemana = (f) => !!f && f >= d.lunes && f <= d.domingo;
+  crear('Condiciones', [...d.clientes]
+    .sort((a, b) => compararTexto(a.nombreComercial, b.nombreComercial))
+    .flatMap((c) => (c.condicionesEspeciales || []).map((x) => [...pre(c), x.producto || '', x.condicion || '', x.hasta || '',
+      x.nota || '', x.creada || '', x.hasta && x.hasta < d.fechaRef ? 'Caducada' : 'Vigente', enSemana(x.creada) ? 'Sí' : ''])));
 
   crear('Cambios ICG', d.cambiosICG.map((x) => [com, d.lunes, x.codigo, x.cliente, x.fecha, x.campo, x.antes, x.despues, x.tipo === 'nuevo' ? 'Sí' : '']));
 

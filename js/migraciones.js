@@ -12,7 +12,7 @@
 
 import { clienteVacio, registroVacio, ajustesVacios, recordatorioVacio, promocionVacia } from './logica.js';
 
-export const ESQUEMA_ACTUAL = 1;
+export const ESQUEMA_ACTUAL = 2;
 export const FORMATO_COPIA = 'llamadas-vinoliva';
 export const COLECCIONES = ['clientes', 'llamadas', 'recordatorios', 'promociones', 'cambios', 'ajustes'];
 
@@ -41,6 +41,12 @@ export const MIGRACIONES = {
     recordatorios: d.recordatorios.map(completarRecordatorio),
     promociones: d.promociones.map(completarPromocion),
     ajustes: d.ajustes.length ? d.ajustes.map(completarAjustes) : [],
+  }),
+  // Versión 2 (app 1.3.0, fase 4): los clientes reciben telefonosInfo, llamarDesde y
+  // condicionesEspeciales vacíos. No se toca ningún dato que ya existiera.
+  2: (d) => ({
+    ...d,
+    clientes: d.clientes.map(completarCliente),
   }),
 };
 

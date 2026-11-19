@@ -8,7 +8,8 @@ import * as datos from './datos.js';
 import {
   aplicarAccion, nuevoRegistro, mensajePedido, rellenarPlantilla, enlaceWhatsApp, telefonoInternacional,
   formatearTelefono, sumarMinutos, lunesDe, resumenNoContesta, fechaNormal, sumarDias, deshacerUltimaAccion,
-  ORIGENES_PEDIDO, recordatorioVacio, coincideBusqueda,
+  ORIGENES_PEDIDO, recordatorioVacio, coincideBusqueda, telefonosPara, USOS_TELEFONO,
+  condicionesVigentes, textoCondicion, ultimoPedidoConTexto,
 } from './logica.js';
 import { h, hoja, toast, abrirEnlace, compartirTexto, confirmar } from './ui.js';
 
@@ -23,19 +24,25 @@ const ahoraFH = () => ctx.reloj.ahoraFH();
 //  Teléfonos
 // ---------------------------------------------------------------------
 
-/** Si el cliente tiene varios teléfonos, pregunta cuál. Devuelve el número o null. */
-function elegirTelefono(cliente, verbo) {
-  const tels = cliente.telefonos || [];
+/** Elige el teléfono para 'llamar' o 'whatsapp'. Si solo hay uno que sirva, lo usa
+ *  directamente; si hay varios, pregunta mostrando el nombre de cada uno.
+ *  Devuelve el número o null. */
+function elegirTelefono(cliente, para) {
+  const tels = telefonosPara(cliente, para);
   if (!tels.length) { toast('Este cliente no tiene teléfono. Añádelo en su ficha.'); return Promise.resolve(null); }
-  if (tels.length === 1) return Promise.resolve(tels[0]);
+  if (tels.length === 1) return Promise.resolve(tels[0].numero);
   return new Promise((resolver) => {
     let elegido = null;
     hoja({
-      titulo: `¿A qué número ${verbo}?`,
+      titulo: para === 'whatsapp' ? '¿A qué WhatsApp escribes?' : '¿A qué número llamas?',
       alCerrar: () => resolver(elegido),
       contenido: (cerrar) => h('div', { class: 'lista-botones' },
-        tels.map((t) => h('button', { class: 'btn btn-secundario btn-ancho', onClick: () => { elegido = t; cerrar(); } },
-          formatearTelefono(t)))),
+        tels.map((t) => h('button', {
+          class: 'btn btn-secundario btn-ancho btn-telefono',
+          onClick: () => { elegido = t.numero; cerrar(); },
+        },
+        h('span', { class: 'bt-nombre' }, t.nombre || 'Sin nombre'),
+        h('span', { class: 'bt-numero' }, formatearTelefono(t.numero) + (t.uso !== 'todo' ? ` · ${USOS_TELEFONO[t.uso].toLowerCase()}` : ''))))),
     });
   });
 }
@@ -69,7 +76,7 @@ export function revisarLlamadaEnCurso({ alRecargar = false } = {}) {
 }
 
 export async function whatsapp(cliente, fechaPrevista) {
-  const tel = await elegirTelefono(cliente, 'escribir');
+  const tel = await elegirTelefono(cliente, 'whatsapp');
   if (!tel) return;
   const reg = fechaPrevista ? datos.registroDe(cliente.id, fechaPrevista) : null;
   let texto = '';
@@ -101,6 +108,29 @@ function avisoConDeshacer(texto, deshacer) {
 
 const nombreCorto = (c) => c.nombreComercial;
 
+/** Ayudas al apuntar un pedido: condiciones del cliente, lo que suele pedir y
+ *  «Repetir último pedido». `excluirId`: el registro que se está editando. */
+function ayudasPedido(cliente, area, excluirId = null) {
+  const { fecha } = ahoraFH();
+  const c = datos.obtenerCliente(cliente.id) || cliente;
+  const conds = condicionesVigentes(c, fecha);
+  const ultimo = ultimoPedidoConTexto(datos.llamadasDeCliente(c.id).filter((r) => r.id !== excluirId));
+  if (!conds.length && !c.pideHabitualmente && !ultimo) return null;
+  return h('div', { class: 'ayudas-pedido' },
+    conds.length ? h('div', { class: 'caja-condiciones' },
+      h('strong', {}, 'Condiciones de este cliente'),
+      h('ul', {}, conds.map((x) => h('li', {}, textoCondicion(x) + (x.nota ? ` · ${x.nota}` : ''))))) : null,
+    c.pideHabitualmente ? h('p', { class: 'texto-ayuda' }, h('strong', {}, 'Suele pedir: '), c.pideHabitualmente) : null,
+    ultimo ? h('button', {
+      type: 'button', class: 'btn btn-secundario btn-ancho btn-repetir',
+      onClick: () => {
+        area.value = area.value.trim() ? `${area.value.trim()}\n${ultimo.pedido.trim()}` : ultimo.pedido.trim();
+        area.focus();
+      },
+    }, `↻ Repetir último pedido (${fechaNormal(ultimo.fecha || ultimo.fechaPrevista)})`) : null,
+    ultimo ? h('p', { class: 'texto-ayuda ultimo-pedido' }, ultimo.pedido.trim()) : null);
+}
+
 /** Panel «¿Cómo ha ido con …?» */
 export function preguntarResultado(cliente, fechaPrevista) {
   const panel = hoja({ titulo: `¿Cómo ha ido con ${nombreCorto(cliente)}?` });
@@ -117,6 +147,7 @@ export function preguntarResultado(cliente, fechaPrevista) {
     const area = h('textarea', { class: 'campo', rows: 5, placeholder: 'Qué ha pedido (opcional)' });
     setTimeout(() => area.focus(), 200);
     return h('div', {},
+      ayudasPedido(cliente, area, datos.registroDe(cliente.id, fechaPrevista)?.id),
       h('label', { class: 'etiqueta-campo' }, '¿Qué ha pedido?'),
       area,
       h('div', { class: 'columna-botones' },
@@ -334,6 +365,7 @@ export function registrarPedido(cliente) {
     contenido: () => h('div', {},
       h('span', { class: 'etiqueta-campo' }, '¿Cómo te ha llegado?'),
       botonesOrigen,
+      ayudasPedido(cliente, area, datos.registroDe(cliente.id, ahoraFH().fecha)?.id),
       h('label', { class: 'etiqueta-campo' }, '¿Qué ha pedido?'),
       area,
       h('p', { class: 'texto-ayuda' }, 'Este cliente ya no saldrá para llamar en lo que queda de semana.'),
