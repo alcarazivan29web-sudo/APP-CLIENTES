@@ -476,3 +476,19 @@ body.con-banda .pc-cabecera { top: 22px; }
 .fe-detalle { grid-column: 2; color: var(--texto-2); font-size: 14px; }
 .pie-accion .btn { padding-left: 8px; padding-right: 8px; }
 .pie-accion .btn-cancelar-sel { flex: 0 0 auto; }
+
+/* ---------- Fase 6 · La oficina manda ---------- */
+.aviso-oficina { background: #eaf0fa; border-color: var(--azul); }
+.aviso-oficina-titulo { margin: 0 0 6px; font-weight: 800; color: var(--azul); }
+.mensaje-texto { white-space: pre-line; word-break: break-word; margin: 0 0 10px; font-size: 17px; }
+.tarjeta-mensaje { background: var(--blanco); border: 1px solid var(--borde); border-left: 6px solid var(--azul); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+.resumen-oficina { list-style: none; padding: 0; margin: 8px 0 12px; }
+.resumen-oficina li.sin-cambio { color: var(--texto-2); }
+.detalle-cambio { display: block; color: var(--texto-2); font-size: 14px; word-break: break-word; }
+
+/* Versión de cierre: la app ya no está en uso */
+.pantalla-cierre { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 24px 20px; max-width: 520px; margin: 0 auto; }
+.pantalla-cierre h1 { color: var(--azul); font-size: 26px; margin: 0; }
+.pantalla-cierre .cierre-marca { color: var(--dorado); font-weight: 800; letter-spacing: .04em; margin: 0; }
+.pantalla-cierre .mensaje-texto { font-size: 18px; }
+.pantalla-cierre ol { margin: 0; padding-left: 22px; line-height: 1.5; }

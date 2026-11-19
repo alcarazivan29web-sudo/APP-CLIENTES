@@ -411,21 +411,77 @@ export const TIPOS_ENCARGO = [
   { id: 'cobro', icono: '🧾', texto: 'Revisar un cobro o una factura' },
   { id: 'otro', icono: '✏️', texto: 'Otro', pide: 'texto' },
 ];
-export const tipoEncargo = (id) => TIPOS_ENCARGO.find((t) => t.id === id) || { id, icono: '📌', texto: id || 'Encargo' };
+export const tipoEncargo = (id, lista = null) => (lista || []).find((t) => t.id === id)
+  || TIPOS_ENCARGO.find((t) => t.id === id) || { id, icono: '📌', texto: id || 'Encargo' };
 
-/** Un encargo puede ser de un cliente o de varios a la vez (clienteIds). */
+/** Lista de encargos que ve el comercial: la que manda la oficina en su Excel
+ *  (ajustes.tiposEncargo) o, si no ha mandado ninguna, la de serie.
+ *  Siempre queda una opción para escribir libremente («Otro»). */
+export function listaEncargos(aj) {
+  const propia = Array.isArray(aj?.tiposEncargo) ? aj.tiposEncargo.filter((t) => t && t.id && t.texto) : [];
+  const base = propia.length ? propia : TIPOS_ENCARGO;
+  return base.some((t) => t.pide === 'texto') ? base : [...base, TIPOS_ENCARGO.find((t) => t.id === 'otro')];
+}
+
+/** Id estable de un encargo de la oficina a partir de su texto. Si coincide con
+ *  uno de serie, se usa el de serie (así el historial sigue cuadrando). */
+export function idTipoEncargo(texto) {
+  const n = normalizarTexto(texto);
+  const deSerie = TIPOS_ENCARGO.find((t) => normalizarTexto(t.texto) === n);
+  if (deSerie) return deSerie.id;
+  return 'of_' + n.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+}
+
+/** Un encargo puede ser de un cliente o de varios a la vez (clienteIds).
+ *  textoTipo / iconoTipo / pideTipo guardan cómo se llamaba el encargo al
+ *  pedirlo, por si la oficina cambia después su lista. */
 export function encargoVacio() {
   return {
-    tipo: '', detalle: '', nota: '', clienteIds: [], fecha: null, hora: null, enviadoPor: '',
-    borrado: false, fechaBorrado: null,
+    tipo: '', textoTipo: '', iconoTipo: '', pideTipo: '', detalle: '', nota: '', clienteIds: [],
+    fecha: null, hora: null, enviadoPor: '', borrado: false, fechaBorrado: null,
   };
+}
+
+/** Datos del tipo que se guardan dentro del encargo al crearlo. */
+export const datosTipoEncargo = (t) => ({ tipo: t.id, textoTipo: t.texto, iconoTipo: t.icono || '📌', pideTipo: t.pide || '' });
+
+function tipoDe(e) {
+  const base = tipoEncargo(e.tipo);
+  return e.textoTipo
+    ? { texto: e.textoTipo, icono: e.iconoTipo || base.icono, pide: e.pideTipo || '' }
+    : base;
 }
 
 /** 'Enviar ficha de un producto: Xoringer' · 'Otro' → lo que se escribió */
 export function tituloEncargo(e) {
-  const t = tipoEncargo(e.tipo);
+  const t = tipoDe(e);
   if (t.pide === 'texto') return e.detalle || t.texto;
   return t.texto + (e.detalle ? `: ${e.detalle}` : '');
+}
+
+export const iconoEncargo = (e) => tipoDe(e).icono || '📌';
+
+// ---------------------------------------------------------------------
+//  Mensajes de la oficina (llegan en su Excel)
+// ---------------------------------------------------------------------
+
+/** Id corto y estable de un mensaje: si la oficina lo cambia, vuelve a salir. */
+export function idMensajeOficina(m) {
+  const s = `${m.texto}|${m.desde || ''}|${m.hasta || ''}`;
+  let x = 5381;
+  for (let i = 0; i < s.length; i++) x = ((x * 33) ^ s.charCodeAt(i)) >>> 0;
+  return 'm' + x.toString(36);
+}
+
+/** Mensajes que se ven en una fecha (las fechas son opcionales). */
+export function mensajesVigentes(mensajes, fecha) {
+  return (mensajes || []).filter((m) => m && m.texto && (!m.desde || m.desde <= fecha) && (!m.hasta || m.hasta >= fecha));
+}
+
+/** Los que todavía no se han marcado como «Entendido». */
+export function mensajesPorLeer(aj, fecha) {
+  const vistos = new Set(aj?.mensajesVistos || []);
+  return mensajesVigentes(aj?.mensajesOficina, fecha).filter((m) => !vistos.has(m.id));
 }
 
 /** Mensaje de WhatsApp para la oficina. Empieza siempre por «📌 ENCARGO». */
@@ -491,6 +547,8 @@ export function ajustesVacios() {
     plantillas: { noContesta: PLANTILLA_NO_CONTESTA },
     semanasRiesgo: 3, primerUso: null, ultimaCopia: null, ultimoResumen: null, resumenesEnviados: [],
     avisoSemanaPasadaCerrado: null, avisoCompletarCerrado: null,
+    // Fase 6 · lo que manda la oficina en su Excel
+    tiposEncargo: [], mensajesOficina: [], mensajesVistos: [], excelOficina: null,
   };
 }
 

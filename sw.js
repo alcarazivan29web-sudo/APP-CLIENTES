@@ -5,8 +5,13 @@
 //  IndexedDB y no se tocan al actualizar.
 // =====================================================================
 
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const CACHE = 'llamadas-vinoliva-' + VERSION;
+
+// Versión de cierre: ponlo en true A LA VEZ que CIERRE.activo en js/cierre.js.
+// Así la versión nueva se aplica sola al abrir la app con conexión, sin
+// esperar a que el comercial pulse «Actualizar».
+const CIERRE_ACTIVO = false;
 
 const ARCHIVOS = [
   './',
@@ -15,6 +20,7 @@ const ARCHIVOS = [
   'css/estilos.css',
   'js/app.js',
   'js/acciones.js',
+  'js/cierre.js',
   'js/datos.js',
   'js/exportar.js',
   'js/importar.js',
@@ -30,6 +36,7 @@ const ARCHIVOS = [
   'js/pantallas/ficha.js',
   'js/pantallas/mas.js',
   'js/pantallas/oficina.js',
+  'js/pantallas/cierre.js',
   'lib/xlsx.full.min.js',
   'icons/icono-192.png',
   'icons/icono-512.png',
@@ -39,8 +46,12 @@ const ARCHIVOS = [
 ];
 
 self.addEventListener('install', (ev) => {
-  ev.waitUntil(caches.open(CACHE).then((c) => c.addAll(ARCHIVOS)));
+  // cache: 'reload' → pide los archivos nuevos al servidor, sin usar la caché
+  // normal del navegador (si no, podría guardar archivos de la versión anterior).
+  ev.waitUntil(caches.open(CACHE).then((c) => c.addAll(ARCHIVOS.map((a) => new Request(a, { cache: 'reload' })))));
   // No se activa solo: la app enseña «Hay una versión nueva · Actualizar».
+  // Salvo la versión de cierre, que entra directamente.
+  if (CIERRE_ACTIVO) self.skipWaiting();
 });
 
 self.addEventListener('message', (ev) => {

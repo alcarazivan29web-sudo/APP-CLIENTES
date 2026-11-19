@@ -9,7 +9,7 @@ import {
   NOMBRE_SITUACION, horaDeMarca, capitalizarPrimera, diaSemana, analizarHora, lunesDe,
   ORIGENES_PEDIDO, calcularRiesgo, textoRiesgo, fechaCorta, formatearImporte,
   telefonosDe, USOS_TELEFONO, NOMBRES_TELEFONO, faltaPorConfigurar, NOMBRE_DATO, condicionVacia, textoCondicion,
-  tituloEncargo, tipoEncargo,
+  tituloEncargo, iconoEncargo,
 } from '../logica.js';
 import { h, hoja, pantallaCompleta, confirmar, toast, selectorDias } from '../ui.js';
 
@@ -435,7 +435,7 @@ function seccionEncargos(c, repintar) {
     },
   },
   h('span', { class: 'fe-fecha' }, `${capitalizarPrimera(DIAS[diaSemana(e.fecha)]).slice(0, 3)} ${fechaNormal(e.fecha)}`),
-  h('span', { class: 'fe-texto' }, `${tipoEncargo(e.tipo).icono} ${tituloEncargo(e)}`),
+  h('span', { class: 'fe-texto' }, `${iconoEncargo(e)} ${tituloEncargo(e)}`),
   e.nota || (e.clienteIds || []).length > 1 ? h('span', { class: 'fe-detalle' },
     [(e.clienteIds || []).length > 1 ? `Junto con ${(e.clienteIds.length - 1)} ${e.clienteIds.length === 2 ? 'cliente más' : 'clientes más'}` : '', e.nota]
       .filter(Boolean).join(' · ')) : null);

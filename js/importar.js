@@ -6,7 +6,7 @@
 
 import {
   normalizarTexto, analizarDias, analizarHora, extraerTelefonos, clienteVacio, analizarFecha, promocionVacia,
-  leerTelefonosConNombre,
+  leerTelefonosConNombre, idTipoEncargo, idMensajeOficina, TIPOS_ENCARGO, formatearTelefono,
 } from './logica.js';
 
 /** Columnas conocidas del Excel → campo de la app. Las demás se ignoran. */
@@ -257,6 +257,201 @@ export function filasAPromociones(filas, { fecha = null } = {}) {
 }
 
 // ---------------------------------------------------------------------
+//  Fase 6 · Excel de la oficina: Promociones, Encargos, Mensaje y Números
+// ---------------------------------------------------------------------
+
+const esEjemplo = (v) => /^EJEMPLO/i.test(texto(v));
+
+/** Busca la fila de cabecera que tiene alguna de las columnas indicadas
+ *  y devuelve { iCab, mapa } con la posición de cada campo. */
+function cabecera(filas, columnas, obligatoria) {
+  const iCab = (filas || []).findIndex((f) => (f || []).some((c) => columnas[obligatoria].map(normalizarTexto).includes(normalizarTexto(c))));
+  if (iCab < 0) return null;
+  const mapa = {};
+  filas[iCab].forEach((h, i) => {
+    const n = normalizarTexto(h);
+    const campo = Object.keys(columnas).find((k) => columnas[k].map(normalizarTexto).includes(n));
+    if (campo && mapa[campo] === undefined) mapa[campo] = i;
+  });
+  return { iCab, mapa, col: (f, k) => (mapa[k] === undefined ? '' : (f || [])[mapa[k]]) };
+}
+
+export const COLUMNAS_ENCARGOS = {
+  texto: ['ENCARGO', 'ENCARGOS', 'QUE SE PUEDE PEDIR', 'TIPO DE ENCARGO'],
+  pide: ['HAY QUE ESCRIBIR', 'PIDE', 'EL COMERCIAL ESCRIBE'],
+  icono: ['ICONO', 'EMOJI'],
+};
+
+/** Hoja «Encargos» → { tipos, avisos, ejemplos }. «Hay que escribir»: vacío,
+ *  «Producto» (pide qué producto) o «Texto» (el comercial lo escribe). */
+export function filasAEncargos(filas) {
+  const avisos = [];
+  const cab = cabecera(filas, COLUMNAS_ENCARGOS, 'texto');
+  if (!cab) return { tipos: [], avisos: ['En la hoja «Encargos» no encuentro la columna «Encargo».'], ejemplos: 0 };
+  const tipos = [];
+  let ejemplos = 0;
+  const vistos = new Set();
+  for (let i = cab.iCab + 1; i < filas.length; i++) {
+    const f = filas[i] || [];
+    const t = texto(cab.col(f, 'texto'));
+    if (!t) continue;
+    if (esEjemplo(t)) { ejemplos++; continue; }
+    const p = normalizarTexto(cab.col(f, 'pide'));
+    const pide = !p || ['NO', 'NADA', '-'].includes(p) ? ''
+      : p.includes('PRODUCTO') ? 'producto'
+        : 'texto';
+    const id = idTipoEncargo(t);
+    if (vistos.has(id)) { avisos.push(`Fila ${i + 1}: «${t}» está repetido, se pone una vez.`); continue; }
+    vistos.add(id);
+    const deSerie = TIPOS_ENCARGO.find((x) => x.id === id);
+    tipos.push({ id, texto: t, icono: texto(cab.col(f, 'icono')) || deSerie?.icono || '📌', pide });
+  }
+  return { tipos, avisos, ejemplos };
+}
+
+export const COLUMNAS_MENSAJE = {
+  texto: ['MENSAJE', 'MENSAJE DE LA OFICINA', 'MENSAJE DE LA SEMANA', 'AVISO'],
+  desde: ['DESDE', 'INICIO', 'FECHA INICIO'],
+  hasta: ['HASTA', 'FIN', 'FECHA FIN'],
+};
+
+/** Hoja «Mensaje» → { mensajes, avisos, ejemplos }. Puede haber varios, cada uno con sus fechas. */
+export function filasAMensajes(filas) {
+  const avisos = [];
+  const cab = cabecera(filas, COLUMNAS_MENSAJE, 'texto');
+  if (!cab) return { mensajes: [], avisos: ['En la hoja «Mensaje» no encuentro la columna «Mensaje».'], ejemplos: 0 };
+  const mensajes = [];
+  let ejemplos = 0;
+  for (let i = cab.iCab + 1; i < filas.length; i++) {
+    const f = filas[i] || [];
+    const t = String(cab.col(f, 'texto') ?? '').replace(/\r\n?/g, '\n').split('\n').map((l) => l.trim()).join('\n').trim();
+    if (!t) continue;
+    if (esEjemplo(t)) { ejemplos++; continue; }
+    const m = { texto: t, desde: null, hasta: null };
+    for (const k of ['desde', 'hasta']) {
+      const v = cab.col(f, k);
+      m[k] = analizarFecha(v);
+      if (texto(v) && !m[k] && !(v instanceof Date)) avisos.push(`Mensaje de la fila ${i + 1}: no entiendo la fecha «${texto(v)}» de «${k}».`);
+    }
+    if (m.desde && m.hasta && m.hasta < m.desde) avisos.push(`Mensaje de la fila ${i + 1}: «hasta» es anterior a «desde».`);
+    mensajes.push({ ...m, id: idMensajeOficina(m) });
+  }
+  return { mensajes, avisos, ejemplos };
+}
+
+/** Hoja «Números» (Dato | Valor) → { numeros: { whatsappOficina?, contactoIvan? }, avisos }.
+ *  Solo cuentan los que vienen rellenos. */
+export function filasANumeros(filas) {
+  const avisos = [];
+  const numeros = {};
+  (filas || []).forEach((f, i) => {
+    const clave = normalizarTexto((f || [])[0]);
+    const valor = texto((f || [])[1]);
+    if (!clave || !valor || esEjemplo(valor)) return;
+    if (clave.includes('IVAN') || clave.includes('RESUMEN')) {
+      const correo = valor.match(/\S+@\S+\.\S+/)?.[0];
+      const tel = extraerTelefonos(valor)[0];
+      if (correo || tel) numeros.contactoIvan = correo || formatearTelefono(tel);
+      else avisos.push(`Fila ${i + 1}: «${valor}» no parece un teléfono ni un correo.`);
+    } else if (clave.includes('OFICINA') || clave.includes('PEDIDOS')) {
+      const tel = extraerTelefonos(valor)[0];
+      if (tel) numeros.whatsappOficina = formatearTelefono(tel);
+      else avisos.push(`Fila ${i + 1}: «${valor}» no parece un teléfono.`);
+    }
+  });
+  return { numeros, avisos };
+}
+
+const HOJAS_OFICINA = {
+  promociones: ['PROMOCIONES', 'PROMOS', 'PROMOCION'],
+  encargos: ['ENCARGOS', 'ENCARGO', 'LISTA DE ENCARGOS'],
+  mensajes: ['MENSAJE', 'MENSAJES', 'MENSAJE DE LA SEMANA', 'MENSAJE DE LA OFICINA'],
+  numeros: ['NUMEROS', 'TELEFONOS', 'CONTACTOS'],
+};
+
+/** Libro completo { nombreHoja: filas } → lo que trae cada hoja (o null si no viene).
+ *  Un archivo antiguo con solo una hoja de promociones también vale. */
+export function analizarExcelOficina(libro, { fecha = null } = {}) {
+  const nombres = Object.keys(libro || {});
+  const hoja = (k) => nombres.find((n) => HOJAS_OFICINA[k].includes(normalizarTexto(n)));
+  const r = { promociones: null, encargos: null, mensajes: null, numeros: null };
+  let nPromos = hoja('promociones');
+  if (!nPromos && !hoja('encargos') && !hoja('mensajes') && !hoja('numeros') && nombres.length) nPromos = nombres[0];
+  if (nPromos) r.promociones = filasAPromociones(libro[nPromos], { fecha });
+  if (hoja('encargos')) r.encargos = filasAEncargos(libro[hoja('encargos')]);
+  if (hoja('mensajes')) r.mensajes = filasAMensajes(libro[hoja('mensajes')]);
+  if (hoja('numeros')) r.numeros = filasANumeros(libro[hoja('numeros')]);
+  return r;
+}
+
+/** Compara lo que trae el Excel con lo que hay en el móvil.
+ *  Devuelve { cambios: [...], guardar: {ajustes}, promociones | null }.
+ *  Reglas: las promociones sustituyen a las actuales (si el archivo trae alguna);
+ *  la lista de encargos sustituye a la actual (si trae alguno); los mensajes
+ *  sustituyen a los actuales (una hoja «Mensaje» vacía los quita); los números
+ *  solo cambian si vienen rellenos. */
+export function planExcelOficina(analisis, { ajustes, promocionesActuales = 0, fecha }) {
+  const cambios = [];
+  const avisos = [];
+  const guardar = {};
+  let promociones = null;
+  const a = analisis;
+  for (const k of ['promociones', 'encargos', 'mensajes', 'numeros']) if (a[k]?.avisos?.length) avisos.push(...a[k].avisos);
+  if (a.promociones) {
+    const n = a.promociones.promociones.length;
+    if (n) {
+      promociones = a.promociones.promociones;
+      const caducadas = promociones.filter((p) => p.hasta && fecha && p.hasta < fecha).length;
+      cambios.push({ tipo: 'promociones', texto: `${n} ${n === 1 ? 'promoción' : 'promociones'}` +
+        (promocionesActuales ? ` (sustituyen a las ${promocionesActuales} de ahora)` : ''),
+      detalle: caducadas ? `${caducadas} ya ${caducadas === 1 ? 'ha caducado y no se verá' : 'han caducado y no se verán'}` : '' });
+    } else {
+      cambios.push({ tipo: 'promociones', texto: 'Promociones: el archivo no trae ninguna', detalle: promocionesActuales ? `Se quedan las ${promocionesActuales} de ahora.` : '', sinCambio: true });
+    }
+  }
+  if (a.encargos) {
+    const lista = a.encargos.tipos;
+    if (lista.length) {
+      const antes = JSON.stringify(ajustes.tiposEncargo || []);
+      guardar.tiposEncargo = lista;
+      cambios.push({ tipo: 'encargos', texto: `Lista de encargos: ${lista.length} ${lista.length === 1 ? 'opción' : 'opciones'}`,
+        detalle: lista.map((t) => `${t.icono} ${t.texto}`).join(' · '), sinCambio: antes === JSON.stringify(lista) });
+    } else {
+      cambios.push({ tipo: 'encargos', texto: 'Lista de encargos: la hoja está vacía', detalle: 'Se queda la lista de ahora.', sinCambio: true });
+    }
+  }
+  if (a.mensajes) {
+    const lista = a.mensajes.mensajes;
+    const antes = (ajustes.mensajesOficina || []).map((m) => m.id).join();
+    guardar.mensajesOficina = lista;
+    const sinCambio = antes === lista.map((m) => m.id).join();
+    if (lista.length) {
+      cambios.push({ tipo: 'mensajes', texto: lista.length === 1 ? 'Mensaje de la oficina' : `${lista.length} mensajes de la oficina`,
+        detalle: lista.map((m) => m.texto.split('\n')[0] + (m.desde || m.hasta ? ` (${m.desde ? 'desde ' + m.desde.split('-').reverse().join('/') : ''}${m.desde && m.hasta ? ' ' : ''}${m.hasta ? 'hasta ' + m.hasta.split('-').reverse().join('/') : ''})` : '')).join(' · '),
+        sinCambio });
+    } else {
+      cambios.push({ tipo: 'mensajes', texto: 'Mensaje de la oficina: ninguno',
+        detalle: antes ? 'Se quita el mensaje que había.' : '', sinCambio });
+    }
+  }
+  if (a.numeros) {
+    const nombres = { whatsappOficina: 'WhatsApp de la oficina', contactoIvan: 'WhatsApp o correo de Iván' };
+    for (const [k, v] of Object.entries(a.numeros.numeros)) {
+      const igual = String(ajustes[k] || '').replace(/\s/g, '') === String(v).replace(/\s/g, '');
+      if (!igual) guardar[k] = v;
+      cambios.push({ tipo: 'numeros', texto: `${nombres[k]}: ${v}`, detalle: igual ? '' : (ajustes[k] ? `Antes: ${ajustes[k]}` : 'Antes estaba vacío'), sinCambio: igual });
+    }
+  }
+  const hayAlgo = cambios.some((c) => !c.sinCambio);
+  if (guardar.mensajesOficina) {
+    // Los «Entendido» de mensajes que ya no están se olvidan
+    const ids = new Set(guardar.mensajesOficina.map((m) => m.id));
+    guardar.mensajesVistos = (ajustes.mensajesVistos || []).filter((id) => ids.has(id));
+  }
+  return { cambios, avisos, guardar, promociones, hayAlgo };
+}
+
+// ---------------------------------------------------------------------
 //  Navegador: leer el archivo con SheetJS
 // ---------------------------------------------------------------------
 
@@ -272,4 +467,19 @@ export async function leerArchivo(file, hojaPreferida, { crudo = false } = {}) {
   const hoja = wb.Sheets[nombre];
   // crudo: números y fechas como valores (para promociones); si no, como texto
   return XLSX.utils.sheet_to_json(hoja, { header: 1, raw: crudo && !esTexto, defval: '', dateNF: 'yyyy-mm-dd' });
+}
+
+/** Lee todas las hojas de un .xlsx → { nombreHoja: filas } (fechas y números como valores). */
+export async function leerLibro(file) {
+  const XLSX = globalThis.XLSX;
+  if (!XLSX) throw new Error('No se ha cargado la librería de Excel.');
+  const esTexto = /\.(csv|txt)$/i.test(file.name);
+  const wb = esTexto
+    ? XLSX.read(await file.text(), { type: 'string', raw: true })
+    : XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+  const libro = {};
+  for (const n of wb.SheetNames) {
+    libro[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: !esTexto, defval: '', dateNF: 'yyyy-mm-dd' });
+  }
+  return libro;
 }

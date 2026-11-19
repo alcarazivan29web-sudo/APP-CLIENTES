@@ -12,6 +12,8 @@ import * as semana from './pantallas/semana.js';
 import * as clientes from './pantallas/clientes.js';
 import * as mas from './pantallas/mas.js';
 import { abrirFicha } from './pantallas/ficha.js';
+import { CIERRE } from './cierre.js';
+import { mostrarCierre } from './pantallas/cierre.js';
 
 const PANTALLAS = { hoy, semana, clientes, mas };
 const PESTANAS = [['hoy', 'Hoy', '☎'], ['semana', 'Semana', '▦'], ['clientes', 'Clientes', '☰'], ['mas', 'Más', '⋯']];
@@ -109,6 +111,12 @@ async function arrancar() {
     const { fecha, hora } = reloj.ahoraFH();
     document.body.append(h('div', { class: 'banda-prueba' }, `MODO PRUEBA · ${fechaNormal(fecha)} ${hora}`));
     document.body.classList.add('con-banda');
+  }
+  // Versión de cierre (js/cierre.js): la app ya no está en uso
+  if (CIERRE.activo) {
+    if (!CIERRE.borrarDatos) registrarSW(); // por si algún día se vuelve a abrir
+    await mostrarCierre(contenido, CIERRE, { prueba: reloj.esPrueba });
+    return;
   }
   try {
     await datos.iniciar({ prueba: reloj.esPrueba, reloj: reloj.ahora });

@@ -10,7 +10,7 @@ import {
   calcularListaDia, calcularSemana, fechaLarga, fechaDeMarca, diasEntre, formatearTelefono,
   sumarDias, lunesDe, DIAS, NOMBRE_SITUACION, analizarCierre, fechaCorta, diaSemana, capitalizarPrimera,
   ORIGENES_PEDIDO, formatearImporte, telefonosDe, textoTelefono, USOS_TELEFONO, condicionesVigentes, textoCondicion,
-  faltaPorConfigurar, estadoEnFecha,
+  faltaPorConfigurar, estadoEnFecha, mensajesPorLeer,
 } from '../logica.js';
 import { verPorCompletar } from './clientes.js';
 import { h } from '../ui.js';
@@ -80,6 +80,20 @@ export function render(cont, ctx) {
 
 function avisos(ctx, aj, clientes, lista, fecha) {
   const out = [];
+  // Mensaje de la oficina (llega en su Excel); sale hasta que se pulsa «Entendido»
+  for (const m of mensajesPorLeer(aj, fecha)) {
+    out.push(h('div', { class: 'aviso aviso-oficina', role: 'status' },
+      h('p', { class: 'aviso-oficina-titulo' }, '📣 Mensaje de la oficina'),
+      h('p', { class: 'mensaje-texto' }, m.texto),
+      h('button', {
+        class: 'btn btn-principal btn-peq',
+        onClick: async () => {
+          const vistos = [...new Set([...(datos.obtenerAjustes().mensajesVistos || []), m.id])].slice(-50);
+          await datos.guardarAjustes({ mensajesVistos: vistos });
+          ctx.refrescar();
+        },
+      }, 'Entendido')));
+  }
   // Resumen semanal para Iván (desde el viernes a mediodía; el lunes, si no se mandó)
   const semanaResumen = clientes.length ? resumenPorEnviar(aj, fecha, lista.hora, lista.dia) : null;
   if (semanaResumen) {

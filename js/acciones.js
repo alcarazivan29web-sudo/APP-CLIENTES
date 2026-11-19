@@ -10,7 +10,7 @@ import {
   formatearTelefono, sumarMinutos, lunesDe, resumenNoContesta, fechaNormal, sumarDias, deshacerUltimaAccion,
   ORIGENES_PEDIDO, recordatorioVacio, coincideBusqueda, telefonosPara, USOS_TELEFONO,
   condicionesVigentes, textoCondicion, ultimoPedidoConTexto,
-  TIPOS_ENCARGO, tipoEncargo, encargoVacio, mensajeEncargo, tituloEncargo,
+  listaEncargos, datosTipoEncargo, encargoVacio, mensajeEncargo, tituloEncargo,
 } from './logica.js';
 import { h, hoja, toast, abrirEnlace, compartirTexto, confirmar } from './ui.js';
 import { exportarListaEncargo } from './exportar.js';
@@ -280,7 +280,7 @@ export function pedirAOficina(clientes, { alTerminar } = {}) {
       ? 'Elige qué necesitas. A la oficina le llega un solo mensaje con la lista de clientes y sus datos.'
       : 'Elige qué necesitas. A la oficina le llega un WhatsApp con los datos del cliente para que lo haga.'),
     h('div', { class: 'lista-botones lista-encargos' },
-      TIPOS_ENCARGO.map((t) => h('button', { class: 'btn btn-secundario btn-ancho btn-encargo', onClick: () => panel.poner(formulario(t)) },
+      listaEncargos(datos.obtenerAjustes()).map((t) => h('button', { class: 'btn btn-secundario btn-ancho btn-encargo', onClick: () => panel.poner(formulario(t)) },
         h('span', { class: 'enc-icono', 'aria-hidden': 'true' }, t.icono), h('span', {}, t.texto)))),
     h('button', { class: 'btn btn-texto', onClick: () => panel.cerrar() }, 'Cancelar'));
 
@@ -295,7 +295,7 @@ export function pedirAOficina(clientes, { alTerminar } = {}) {
         : null;
     const nota = h('textarea', { class: 'campo', rows: 2, placeholder: 'Nota para la oficina (opcional). Ej.: le interesan los cavas' });
     const vista = h('pre', { class: 'vista-previa vista-encargo' });
-    const encargo = () => ({ ...encargoVacio(), tipo: t.id, detalle: detalle ? detalle.value.trim() : '', nota: nota.value.trim(),
+    const encargo = () => ({ ...encargoVacio(), ...datosTipoEncargo(t), detalle: detalle ? detalle.value.trim() : '', nota: nota.value.trim(),
       clienteIds: lista.map((c) => c.id), fecha, hora });
     const pintarVista = () => {
       vista.textContent = mensajeEncargo({ encargo: encargo(), clientes: lista, comercial: aj.nombreComercial, fecha, hora });

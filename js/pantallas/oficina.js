@@ -6,10 +6,10 @@
 import * as datos from '../datos.js';
 import {
   promocionesVigentes, coincidePromo, formatearImporte, fechaCorta, fechaNormal,
-  lunesDe, sumarDias, enlaceWhatsApp, extraerTelefonos,
+  lunesDe, sumarDias, enlaceWhatsApp, extraerTelefonos, mensajesVigentes, listaEncargos,
 } from '../logica.js';
 import { datosSemana, textoResumenSemanal, cambiosParaICG } from '../informes.js';
-import { filasAPromociones, leerArchivo } from '../importar.js';
+import { leerLibro, analizarExcelOficina, planExcelOficina } from '../importar.js';
 import { exportarExcelSemanal, exportarCambiosICG } from '../exportar.js';
 import { h, hoja, toast, confirmar, pantallaCompleta, elegirArchivo, abrirEnlace, compartirTexto } from '../ui.js';
 
@@ -32,7 +32,7 @@ export function abrirPromos(ctx) {
     const vis = todas.filter((p) => coincidePromo(p, buscador.value));
     lista.replaceChildren(...(vis.length
       ? vis.map((p) => tarjetaPromo(p))
-      : [h('p', { class: 'vacio-bloque' }, todas.length ? 'Ninguna promoción coincide.' : 'No hay promociones vigentes. Se importan desde «Más → Importar promociones».')]));
+      : [h('p', { class: 'vacio-bloque' }, todas.length ? 'Ninguna promoción coincide.' : 'No hay promociones vigentes. Llegan con el Excel de la oficina (Más → «Importar Excel de la oficina»).')]));
   };
   buscador.addEventListener('input', pintar);
   pintar();
@@ -58,51 +58,85 @@ function tarjetaPromo(p) {
       fechas ? h('span', { class: 'etiqueta et-recordatorio' }, fechas) : null));
 }
 
-export async function flujoImportarPromos(ctx) {
+/** Importar el Excel de la oficina: promociones, lista de encargos, mensaje
+ *  de la semana y números. Vale también un Excel antiguo solo de promociones. */
+export async function flujoImportarOficina(ctx) {
   const file = await elegirArchivo(ACEPTA_EXCEL);
   if (!file) return;
   const { fecha } = ctx.reloj.ahoraFH();
-  let leido;
+  const aj = datos.obtenerAjustes();
+  let plan;
   try {
-    leido = filasAPromociones(await leerArchivo(file, 'Promociones', { crudo: true }), { fecha });
+    const analisis = analizarExcelOficina(await leerLibro(file), { fecha });
+    plan = planExcelOficina(analisis, { ajustes: aj, promocionesActuales: datos.obtenerPromociones().length, fecha });
   } catch (e) {
     toast('No se pudo leer el archivo: ' + e.message, { duracion: 7000 });
     return;
   }
-  if (!leido.promociones.length) {
-    toast(leido.avisos[0] || (leido.ejemplos ? 'El archivo solo tiene filas de EJEMPLO.' : 'El archivo no tiene promociones.'), { duracion: 7000 });
+  if (!plan.cambios.length) {
+    toast(plan.avisos[0] || 'No encuentro nada de la oficina en este archivo (hojas Promociones, Encargos, Mensaje o Números).', { duracion: 8000 });
     return;
   }
-  const actuales = datos.obtenerPromociones().length;
-  const caducadas = leido.promociones.filter((p) => p.hasta && p.hasta < fecha).length;
+  const fila = (c) => h('li', { class: c.sinCambio ? 'sin-cambio' : '' },
+    h('strong', {}, c.texto), c.sinCambio && !c.detalle ? ' · igual que ahora' : null,
+    c.detalle ? h('span', { class: 'detalle-cambio' }, c.detalle) : null);
   hoja({
-    titulo: 'Importar promociones',
+    titulo: 'Excel de la oficina',
     contenido: (cerrar) => h('div', {},
-      h('ul', { class: 'resumen-importar' },
-        h('li', {}, h('strong', {}, String(leido.promociones.length)), leido.promociones.length === 1 ? ' promoción en el archivo' : ' promociones en el archivo'),
-        leido.ejemplos ? h('li', {}, h('strong', {}, String(leido.ejemplos)), leido.ejemplos === 1 ? ' fila de EJEMPLO (se ignora)' : ' filas de EJEMPLO (se ignoran)') : null,
-        caducadas ? h('li', { class: 'aviso' }, h('strong', {}, String(caducadas)), caducadas === 1 ? ' ya ha caducado (no se verá)' : ' ya han caducado (no se verán)') : null,
-        actuales ? h('li', {}, `Sustituyen a las ${actuales} que hay ahora`) : null),
-      leido.avisos.length ? h('details', {}, h('summary', {}, `Avisos (${leido.avisos.length})`),
-        h('ul', { class: 'lista-simple' }, leido.avisos.slice(0, 100).map((a) => h('li', {}, a)))) : null,
+      h('p', { class: 'texto-ayuda' }, plan.hayAlgo ? 'Esto es lo que trae el archivo:' : 'El archivo no cambia nada de lo que ya tienes:'),
+      h('ul', { class: 'resumen-importar resumen-oficina' }, plan.cambios.map(fila)),
+      plan.avisos.length ? h('details', {}, h('summary', {}, `Avisos (${plan.avisos.length})`),
+        h('ul', { class: 'lista-simple' }, plan.avisos.slice(0, 100).map((a) => h('li', {}, a)))) : null,
       h('div', { class: 'fila-botones' },
-        h('button', { class: 'btn btn-secundario', onClick: () => cerrar() }, 'Cancelar'),
-        h('button', {
+        h('button', { class: 'btn btn-secundario', onClick: () => cerrar() }, plan.hayAlgo ? 'Cancelar' : 'Cerrar'),
+        plan.hayAlgo ? h('button', {
           class: 'btn btn-principal',
           onClick: async (ev) => {
             ev.target.disabled = true;
             try {
-              await datos.reemplazarPromociones(leido.promociones);
+              if (plan.promociones) await datos.reemplazarPromociones(plan.promociones);
+              await datos.guardarAjustes({ ...plan.guardar, excelOficina: { fecha, archivo: file.name } });
               cerrar();
-              toast(`Promociones importadas: ${leido.promociones.length}`);
+              toast('Excel de la oficina importado');
               ctx.refrescar();
             } catch (e) {
               ev.target.disabled = false;
               toast('Error al guardar: ' + e.message, { duracion: 7000 });
             }
           },
-        }, 'Importar'))),
+        }, 'Importar') : null)),
   });
+}
+
+/** Mensajes de la oficina vigentes (también los ya marcados como «Entendido»). */
+export function abrirMensajes(ctx) {
+  const { fecha } = ctx.reloj.ahoraFH();
+  const lista = mensajesVigentes(datos.obtenerAjustes().mensajesOficina, fecha);
+  pantallaCompleta({
+    titulo: 'Mensajes de la oficina',
+    contenido: h('div', {}, lista.length
+      ? lista.map((m) => h('article', { class: 'tarjeta-mensaje' },
+        h('p', { class: 'mensaje-texto' }, m.texto),
+        m.hasta ? h('p', { class: 'texto-ayuda' }, `Hasta el ${fechaCorta(m.hasta)}`) : null))
+      : h('p', { class: 'vacio-bloque' }, 'No hay ningún mensaje de la oficina ahora mismo.')),
+  });
+}
+
+/** Texto corto para la tarjeta de «Más». */
+export function estadoOficina(fecha) {
+  const aj = datos.obtenerAjustes();
+  const n = numPromosVigentes(fecha);
+  const m = mensajesVigentes(aj.mensajesOficina, fecha).length;
+  const propia = (aj.tiposEncargo || []).length > 0;
+  return {
+    promos: n, mensajes: m,
+    texto: [
+      `${n} ${n === 1 ? 'promoción vigente' : 'promociones vigentes'}`,
+      m ? `${m} ${m === 1 ? 'mensaje' : 'mensajes'}` : 'sin mensaje',
+      propia ? `lista de encargos de la oficina (${listaEncargos(aj).length})` : 'lista de encargos de serie',
+    ].join(' · '),
+    ultima: aj.excelOficina,
+  };
 }
 
 // ---------------------------------------------------------------------

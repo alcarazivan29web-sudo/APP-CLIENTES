@@ -6,7 +6,7 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - Los datos se guardan **solo en el móvil**. No hay servidor ni nube.
 - **Los datos de clientes nunca están en el código ni se suben a GitHub.** Se cargan en el móvil con el botón «Importar».
 
-**Estado:** fases 1 (Llamadas), 2 (Seguimiento), 3 (Oficina), 4 (Ficha completa) y 5 (Encargos a la oficina) terminadas. Versión 1.4.0.
+**Estado:** fases 1 (Llamadas), 2 (Seguimiento), 3 (Oficina), 4 (Ficha completa), 5 (Encargos a la oficina) y 6 (La oficina manda) terminadas. Versión 1.5.0.
 
 **Qué hace la fase 2:**
 - **Registrar pedido** (ficha o menú ⋯): pedidos que llegan fuera de su día (llamó el cliente, WhatsApp o visita). Ese cliente ya no sale para llamar el resto de la semana.
@@ -19,7 +19,7 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - **Resumen semanal para Iván:** desde el viernes a las 12:00 sale en Hoy el aviso «Enviar resumen de la semana a Iván». El lunes sigue saliendo si no se envió el viernes. Se abre también desde **Más → Resumen semanal**, donde se pueden ver semanas anteriores. Lleva llamadas por día, pedidos, quién se quedó sin llamar, clientes en riesgo, bajas, vacaciones, clientes y potenciales nuevos, recordatorios sin hacer y cambios para ICG. Se envía por WhatsApp o por correo, según lo que haya en Ajustes.
 - **Excel de la semana:** botón «Enviar Excel de la semana» en el resumen. Se llama `semana_AAAA-MM-DD_Nombre.xlsx` y tiene siempre las mismas hojas: Resumen, Llamadas, Pedidos, Clientes, Cambios ICG y Recordatorios. Todas empiezan por las columnas Comercial · Semana · Código · Cliente, para poder juntar los Excel de varios comerciales. La hoja Clientes **no lleva teléfonos**.
 - **Cambios para ICG** (Más): los datos de clientes que el comercial ha cambiado en la app (teléfono, contacto, forma de pago…), con el antes y el después, para actualizarlos en ICG. Se exportan a Excel. Al enviar el resumen se marcan solos como enviados, con la opción de deshacer.
-- **Promociones:** botón **Promos** en Hoy, con buscador. Se cargan desde **Más → Importar promociones (Excel)**. Cada importación sustituye a las anteriores. Las caducadas no se ven y las que aún no han empezado salen al final, más claras.
+- **Promociones:** botón **Promos** en Hoy, con buscador. Se cargan con el **Excel de la oficina** (Más → «Importar Excel de la oficina»). Cada importación sustituye a las anteriores. Las caducadas no se ven y las que aún no han empezado salen al final, más claras.
 - **Exportar historial** (Más): todas las llamadas y pedidos en un Excel.
 
 **Qué hace la fase 4:**
@@ -44,6 +44,12 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - **A varios clientes a la vez:** en Clientes → «Seleccionar», se marcan los clientes y se pulsa «📌 Oficina». Llega un solo mensaje con la lista. Si son muchos, se puede mandar también la lista en Excel.
 - **Queda apuntado:** en la ficha de cada cliente («Pedido a la oficina»), en el resumen del viernes («Encargos a la oficina») y en la hoja «Encargos» del Excel semanal.
 - Va al **WhatsApp de la oficina** de Ajustes, el mismo de los pedidos. Si está vacío, se abre el menú de compartir.
+
+**Qué hace la fase 6:**
+- **Un solo Excel de la oficina** (`Excel_oficina_plantilla.xlsx`, en `datos-privados/`) con cuatro hojas: **Promociones**, **Encargos** (la lista de cosas que el comercial puede pedir a la oficina), **Mensaje** (el aviso de la semana) y **Números** (WhatsApp de la oficina y el tuyo). En la app: **Más → «Importar Excel de la oficina»**. Antes de importar, la app enseña qué cambia. Un Excel antiguo de solo promociones también vale.
+- **Mensaje de la oficina:** sale arriba en Hoy («📣 Mensaje de la oficina») hasta que el comercial pulsa **Entendido**. Puede tener fechas «desde» y «hasta». Se vuelve a ver en Más → «Ver mensaje de la oficina».
+- **Lista de encargos de la oficina:** si el Excel trae la hoja Encargos, el botón «📌 Pedir a la oficina» enseña esa lista. Siempre queda una opción para escribir libremente. Los encargos ya enviados conservan su nombre aunque cambie la lista.
+- **Versión de cierre preparada y apagada:** ver el apartado 8.
 
 ---
 
@@ -124,7 +130,7 @@ Funciona sin conexión. Solo hace falta internet para enviar WhatsApps.
 
 ---
 
-## 4. Importar los clientes y las promociones desde el móvil
+## 4. Importar los clientes y el Excel de la oficina desde el móvil
 
 1. Desde tu ordenador, mándale el Excel (`Clientes_Bonilla_para_app.xlsx`) por **WhatsApp** o por **correo**.
 2. En su móvil, que **abra o descargue** el archivo desde WhatsApp. Así queda guardado en el móvil, normalmente en la carpeta *Descargas* o *Documentos → WhatsApp*.
@@ -146,13 +152,23 @@ Funciona sin conexión. Solo hace falta internet para enviar WhatsApps.
 
 **Antes de importar:** corrige en el Excel la fila **C001** («JOSE PARSIFAL»), que tiene 11 teléfonos y un teléfono en «Población», y la **C004**, que tiene un email en «Población».
 
-### Promociones
+### Excel de la oficina (promociones, encargos, mensaje y números)
 
-1. Rellena la plantilla `Promociones_semana_plantilla.xlsx` (hoja **Promociones**). Columnas: Producto, Detalle, Precio (€), Promoción, Desde, Hasta y Tipo. Solo «Producto» es obligatoria.
-2. Las filas cuyo producto empiece por **EJEMPLO** se ignoran: puedes dejarlas como guía.
+1. Rellena la plantilla `Excel_oficina_plantilla.xlsx` (en `datos-privados/`). La hoja **LEEME** explica cada hoja.
+   - **Promociones:** Producto, Detalle, Precio (€), Promoción, Desde, Hasta y Tipo. Solo «Producto» es obligatoria.
+   - **Encargos:** uno por fila. «Hay que escribir»: vacío, «Producto» o «Texto». «Icono» es opcional. Viene rellena con la lista actual.
+   - **Mensaje:** el aviso de la semana, con Desde y Hasta opcionales. Para varias líneas dentro de una celda: Alt + Intro.
+   - **Números:** WhatsApp de la oficina y el tuyo. Solo cambian si los rellenas.
+2. Las filas que empiecen por **EJEMPLO** se ignoran: puedes dejarlas como guía.
 3. Mándale el Excel por WhatsApp o correo y que lo abra o descargue en el móvil.
-4. En la app: **Más → Importar promociones (Excel)**. Verá cuántas hay, cuántas son de ejemplo y cuántas ya han caducado. Pulsa **Importar**.
-5. **Sustituyen a las anteriores**: manda siempre el Excel completo con todas las promociones vigentes.
+4. En la app: **Más → «Importar Excel de la oficina»**. Verá qué cambia y pulsará **Importar**.
+5. Qué sustituye a qué:
+   - las **promociones** sustituyen a todas las anteriores (manda siempre todas las vigentes). Si la hoja no trae ninguna, se quedan las de antes;
+   - la **lista de encargos** sustituye a la anterior. Si la hoja está vacía, se queda la de antes;
+   - los **mensajes** sustituyen a los anteriores. Si la hoja Mensaje está vacía, se quita el mensaje;
+   - los **números** solo cambian si vienen rellenos.
+
+**Ojo:** no cambies los nombres de las hojas ni de las columnas.
 
 ---
 
@@ -161,7 +177,7 @@ Funciona sin conexión. Solo hace falta internet para enviar WhatsApps.
 En la app: **Más → Ajustes**.
 
 - **Tu nombre:** el del comercial, por ejemplo «Juan Bonilla». Sale al final de cada pedido.
-- **WhatsApp de la oficina:** el número al que llegan los pedidos. Si se deja vacío, al enviar un pedido se abre el menú de compartir para elegir a quién.
+- **WhatsApp de la oficina:** el número al que llegan los pedidos. Si se deja vacío, al enviar un pedido se abre el menú de compartir para elegir a quién. También se puede cambiar con la hoja «Números» del Excel de la oficina.
 - **WhatsApp o correo de Iván:** para el resumen semanal. Si es un número, se envía por WhatsApp. Si es un correo, se abre el correo con el texto ya escrito. Si se deja vacío, se abre el menú de compartir.
 - **Mensaje cuando no contesta:** se puede cambiar. Usa `{contacto}`, `{nombre}`, `{comercial}` y `{dia}`.
 
@@ -188,8 +204,8 @@ Los datos están en el móvil (IndexedDB), **no** en los archivos de la app. Act
 
 1. Haz los cambios en los archivos.
 2. Sube el número de versión en **dos sitios** (el mismo número en los dos):
-   - `js/version.js` → `export const VERSION = '1.4.0';`
-   - `sw.js` → `const VERSION = '1.4.0';`
+   - `js/version.js` → `export const VERSION = '1.5.0';`
+   - `sw.js` → `const VERSION = '1.5.0';`
 3. Si has añadido un archivo nuevo de la app, añádelo también a la lista `ARCHIVOS` de `sw.js`.
 4. Pasa los tests: `node --test`.
 5. En GitHub Desktop: comprueba que en **Changes** no hay datos de clientes, escribe un resumen, pulsa **Commit to main** y luego **Push origin**.
@@ -197,7 +213,28 @@ Los datos están en el móvil (IndexedDB), **no** en los archivos de la app. Act
 
 ---
 
-## 8. Conectarla a la nube en el futuro (no está hecho)
+## 8. Cerrar la app (versión de cierre)
+
+La app está publicada en tu GitHub, así que la puedes cerrar cuando quieras. Pero **las copias instaladas en los móviles siguen funcionando sin conexión** aunque despubliques la web. Por eso, primero hay que mandarles una «versión de cierre». Ya está preparada y **apagada** en `js/cierre.js`.
+
+1. **Antes de nada:** pide a cada comercial que haga la copia de seguridad y te la mande.
+2. En `js/cierre.js` pon `activo: true`. Elige también:
+   - `borrarDatos: false` → los datos se quedan en el móvil y la app solo deja hacer la copia de seguridad para mandártela;
+   - `borrarDatos: true` → al abrirla, la app **borra** del móvil los clientes, las llamadas, los pedidos y los ajustes, y deja de funcionar sin conexión.
+
+   Puedes cambiar también el texto de `mensaje`.
+3. En `sw.js` pon `const CIERRE_ACTIVO = true;`.
+4. Sube la versión en los dos sitios (apartado 7) y publícala.
+5. Cada comercial verá **«Esta app ya no está en uso»** la próxima vez que la abra **con conexión**. La versión de cierre entra sola, sin pulsar «Actualizar».
+6. Cuando ya la hayan abierto todos, despublica la web: en GitHub, **Settings → Pages → Unpublish site**. Si quieres, borra también el repositorio.
+
+Si cambias de idea: vuelve a poner `activo: false` y `CIERRE_ACTIVO = false`, sube la versión y publícala. Si los datos no se borraron, todo vuelve a estar como antes.
+
+Por ahora el cierre es **para todos a la vez**. Cerrarla solo para un comercial necesita la fase 7 (la nube).
+
+---
+
+## 9. Conectarla a la nube en el futuro (no está hecho)
 
 La app ya está preparada para la nube:
 
@@ -233,13 +270,14 @@ Las pantallas no tendrían que cambiar. Con eso vendrían las cuentas de usuario
 |---|---|
 | `index.html`, `css/estilos.css` | La página y los estilos |
 | `js/app.js` | Arranque, pestañas y aviso de versión nueva |
-| `js/pantallas/` | Una pantalla por archivo: `hoy`, `semana`, `clientes`, `ficha`, `mas` y `oficina` (resumen, ICG y promociones) |
+| `js/pantallas/` | Una pantalla por archivo: `hoy`, `semana`, `clientes`, `ficha`, `mas`, `oficina` (resumen, ICG, promociones y Excel de la oficina) y `cierre` (pantalla de la versión de cierre) |
 | `js/acciones.js` | Llamar, WhatsApp, panel del resultado, más tarde, vacaciones, baja… |
 | `js/logica.js` | Funciones puras: fechas, lista del día, orden, textos y mensajes |
 | `js/informes.js` | Funciones puras: resumen semanal, Excel de la semana, cambios ICG e historial |
 | `js/datos.js` | **El único** que habla con la base de datos del móvil |
 | `js/migraciones.js` | Versión de los datos, migraciones y formato de la copia |
 | `js/importar.js`, `js/exportar.js` | Excel de entrada y de salida, y copia de seguridad |
+| `js/cierre.js` | Interruptor de la versión de cierre (apagado) |
 | `js/reloj.js` | Fecha y hora, con el modo prueba |
 | `js/ui.js` | Piezas de interfaz: paneles, avisos, botones… |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Instalación y funcionamiento sin conexión |
