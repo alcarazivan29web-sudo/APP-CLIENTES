@@ -4,11 +4,11 @@
 
 import * as datos from '../datos.js';
 import { filasAClientes, planificarImportacion, leerArchivo } from '../importar.js';
-import { exportarClientesExcel, hacerCopiaSeguridad, exportarHistorial } from '../exportar.js';
+import { exportarClientesExcel, hacerCopiaSeguridad, exportarHistorial, exportarParaCRM } from '../exportar.js';
 import { abrirPromos, flujoImportarOficina, abrirMensajes, estadoOficina, abrirResumen, abrirCambiosICG, contarCambiosICG } from './oficina.js';
 import { leerCopia } from '../migraciones.js';
 import {
-  fechaNormal, fechaDeMarca, horaDeMarca, PLANTILLA_NO_CONTESTA, rellenarPlantilla,
+  fechaNormal, fechaDeMarca, horaDeMarca, marcaTiempo, PLANTILLA_NO_CONTESTA, rellenarPlantilla,
   recordatoriosDelDia, recordatoriosProximos, fechaCorta, DIAS, diaSemana, capitalizarPrimera,
 } from '../logica.js';
 import * as acciones from '../acciones.js';
@@ -51,7 +51,20 @@ export function render(cont, ctx) {
     tarjeta('Para la oficina',
       h('p', { class: 'texto-ayuda' }, 'El resumen de la semana para Iván (WhatsApp o correo) y el Excel semanal con todo el detalle.'),
       boton('Resumen semanal', () => abrirResumen(ctx), 'btn-principal'),
-      boton(numCambios, () => abrirCambiosICG(ctx))),
+      boton(numCambios, () => abrirCambiosICG(ctx)),
+      boton('Exportar para el CRM', async () => {
+        const exportado = marcaTiempo(ctx.reloj.ahora());
+        try {
+          const r = await exportarParaCRM({ fecha: ctx.reloj.ahoraFH().fecha, exportado });
+          if (r === 'cancelado') return;
+          await datos.guardarAjustes({ ultimoCRM: exportado });
+          toast(r === 'descargado' ? 'Excel para el CRM guardado en Descargas. Mándaselo a la oficina.' : 'Excel para el CRM enviado', { duracion: 7000 });
+          ctx.refrescar();
+        } catch (e) { toast('No se pudo crear el Excel: ' + e.message, { duracion: 7000 }); }
+      }),
+      h('p', { class: 'texto-ayuda' }, aj.ultimoCRM
+        ? `Último Excel para el CRM: ${fechaNormal(fechaDeMarca(aj.ultimoCRM))} a las ${horaDeMarca(aj.ultimoCRM)}. Lleva todo el historial: mándalo cuando te lo pida la oficina.`
+        : 'El Excel para el CRM lleva todos tus clientes y todo el historial de llamadas. Mándalo cuando te lo pida la oficina.')),
     tarjeta('De la oficina',
       h('p', { class: 'texto-ayuda' }, `${ofi.texto}.`),
       h('p', { class: 'texto-ayuda' }, ofi.ultima

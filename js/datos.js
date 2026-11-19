@@ -306,9 +306,9 @@ export async function importarClientes(plan) {
 //  Registros de llamada
 // ---------------------------------------------------------------------
 
-export function obtenerLlamadas() {
+export function obtenerLlamadas({ incluirBorrados = false } = {}) {
   const out = [];
-  for (const r of cache.llamadas.values()) if (!r.borrado) out.push(r);
+  for (const r of cache.llamadas.values()) if (incluirBorrados || !r.borrado) out.push(r);
   return out;
 }
 

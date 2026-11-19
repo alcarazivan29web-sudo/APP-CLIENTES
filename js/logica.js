@@ -550,6 +550,7 @@ export function ajustesVacios() {
     avisoSemanaPasadaCerrado: null, avisoCompletarCerrado: null,
     // Fase 6 · lo que manda la oficina en su Excel
     tiposEncargo: [], mensajesOficina: [], mensajesVistos: [], excelOficina: null,
+    ultimoCRM: null, // fase 7: último «Exportar para el CRM»
   };
 }
 

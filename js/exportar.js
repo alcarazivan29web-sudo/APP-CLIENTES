@@ -11,6 +11,8 @@ import {
   hojasExcelSemanal, nombreExcelSemanal, filasHistorial, nombreArchivoComercial, COLUMNAS_COMUNES,
 } from './informes.js';
 import { compartirArchivo } from './ui.js';
+import { hojasExcelCRM, nombreArchivoCRM } from './crm.js';
+import { VERSION } from './version.js';
 
 const TIPO_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -60,6 +62,17 @@ function libroVariasHojas(hojas, anchos = {}) {
 export async function exportarExcelSemanal(datosDeLaSemana, comercial) {
   const blob = libroVariasHojas(hojasExcelSemanal(datosDeLaSemana, comercial));
   return compartirArchivo(blob, nombreExcelSemanal(datosDeLaSemana.lunes, comercial), 'Excel de la semana');
+}
+
+/** Excel para el CRM de la oficina: todo el historial, formato fijo (js/crm.js). */
+export async function exportarParaCRM({ fecha, exportado }) {
+  const comercial = datos.obtenerAjustes().nombreComercial;
+  const hojas = hojasExcelCRM({
+    clientes: datos.obtenerClientes({ incluirBorrados: true }), llamadas: datos.obtenerLlamadas({ incluirBorrados: true }),
+    comercial, dispositivoId: datos.infoBase().dispositivoId, exportado, fecha, version: VERSION,
+  });
+  const blob = libroVariasHojas(hojas);
+  return compartirArchivo(blob, nombreArchivoCRM(comercial, fecha), 'Excel para el CRM');
 }
 
 /** Todo el historial de llamadas y pedidos desde el primer día. */
