@@ -10,8 +10,10 @@ import {
   formatearTelefono, sumarMinutos, lunesDe, resumenNoContesta, fechaNormal, sumarDias, deshacerUltimaAccion,
   ORIGENES_PEDIDO, recordatorioVacio, coincideBusqueda, telefonosPara, USOS_TELEFONO,
   condicionesVigentes, textoCondicion, ultimoPedidoConTexto,
+  TIPOS_ENCARGO, tipoEncargo, encargoVacio, mensajeEncargo, tituloEncargo,
 } from './logica.js';
 import { h, hoja, toast, abrirEnlace, compartirTexto, confirmar } from './ui.js';
+import { exportarListaEncargo } from './exportar.js';
 
 const CLAVE_LLAMADA = 'llamadaEnCurso';
 let ctx = null; // { reloj, refrescar, abrirFicha }
@@ -262,6 +264,93 @@ export async function enviarAOficina(cliente, registro) {
 }
 
 // ---------------------------------------------------------------------
+//  Encargos a la oficina: «Envíale el catálogo de Navidad a este cliente»
+// ---------------------------------------------------------------------
+
+/** Abre la hoja para pedir algo a la oficina para uno o varios clientes. */
+export function pedirAOficina(clientes, { alTerminar } = {}) {
+  const lista = (Array.isArray(clientes) ? clientes : [clientes]).filter(Boolean);
+  if (!lista.length) return;
+  const varios = lista.length > 1;
+  const titulo = varios ? `Pedir a la oficina · ${lista.length} clientes` : `Pedir a la oficina · ${nombreCorto(lista[0])}`;
+  const panel = hoja({ titulo });
+
+  const elegir = () => h('div', {},
+    h('p', { class: 'texto-ayuda' }, varios
+      ? 'Elige qué necesitas. A la oficina le llega un solo mensaje con la lista de clientes y sus datos.'
+      : 'Elige qué necesitas. A la oficina le llega un WhatsApp con los datos del cliente para que lo haga.'),
+    h('div', { class: 'lista-botones lista-encargos' },
+      TIPOS_ENCARGO.map((t) => h('button', { class: 'btn btn-secundario btn-ancho btn-encargo', onClick: () => panel.poner(formulario(t)) },
+        h('span', { class: 'enc-icono', 'aria-hidden': 'true' }, t.icono), h('span', {}, t.texto)))),
+    h('button', { class: 'btn btn-texto', onClick: () => panel.cerrar() }, 'Cancelar'));
+
+  const formulario = (t) => {
+    const { fecha, hora } = ahoraFH();
+    const aj = datos.obtenerAjustes();
+    const productos = [...new Set(datos.obtenerPromociones().map((p) => p.producto).filter(Boolean))].sort();
+    const detalle = t.pide === 'texto'
+      ? h('textarea', { class: 'campo', rows: 3, placeholder: '¿Qué necesitas que haga la oficina?' })
+      : t.pide === 'producto'
+        ? h('input', { class: 'campo', type: 'text', list: 'productos-encargo', placeholder: '¿Qué producto? Ej.: Xoringer', autocomplete: 'off' })
+        : null;
+    const nota = h('textarea', { class: 'campo', rows: 2, placeholder: 'Nota para la oficina (opcional). Ej.: le interesan los cavas' });
+    const vista = h('pre', { class: 'vista-previa vista-encargo' });
+    const encargo = () => ({ ...encargoVacio(), tipo: t.id, detalle: detalle ? detalle.value.trim() : '', nota: nota.value.trim(),
+      clienteIds: lista.map((c) => c.id), fecha, hora });
+    const pintarVista = () => {
+      vista.textContent = mensajeEncargo({ encargo: encargo(), clientes: lista, comercial: aj.nombreComercial, fecha, hora });
+    };
+    [detalle, nota].forEach((el) => el?.addEventListener('input', pintarVista));
+    pintarVista();
+    if (detalle) setTimeout(() => detalle.focus(), 250);
+
+    const enviar = async () => {
+      const e = encargo();
+      if (t.pide && !e.detalle) {
+        toast(t.pide === 'producto' ? 'Escribe qué producto' : 'Escribe qué necesitas');
+        detalle.focus();
+        return;
+      }
+      const texto = mensajeEncargo({ encargo: e, clientes: lista, comercial: aj.nombreComercial, fecha, hora });
+      let por = 'whatsapp';
+      if (aj.whatsappOficina) {
+        abrirEnlace(enlaceWhatsApp(aj.whatsappOficina.replace(/\s/g, ''), texto));
+      } else {
+        const r = await compartirTexto(texto, 'Encargo para la oficina');
+        if (r === 'cancelado') return;
+        if (r === 'error') { toast('No se pudo compartir. Pon el WhatsApp de la oficina en Más → Ajustes.', { duracion: 7000 }); return; }
+        por = r;
+      }
+      panel.cerrar();
+      const g = await datos.guardarEncargo({ ...e, enviadoPor: por });
+      alTerminar?.();
+      avisoConDeshacer(varios ? `Encargo enviado · ${lista.length} clientes` : `Encargo enviado · ${nombreCorto(lista[0])}`,
+        () => datos.restaurar('encargos', null, g.nuevo.id));
+    };
+
+    return h('div', {},
+      h('h3', { class: 'titulo-encargo' }, `${t.icono} ${t.texto}`),
+      detalle ? h('label', { class: 'campo-grupo' },
+        h('span', { class: 'etiqueta-campo' }, t.pide === 'producto' ? 'Producto' : '¿Qué necesitas?'), detalle) : null,
+      t.pide === 'producto' && productos.length ? h('datalist', { id: 'productos-encargo' }, productos.map((n) => h('option', { value: n }))) : null,
+      h('label', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, 'Nota (opcional)'), nota),
+      h('span', { class: 'etiqueta-campo' }, aj.whatsappOficina ? 'Le llegará a la oficina así:' : 'Mensaje (no hay WhatsApp de la oficina en Ajustes: podrás elegir a quién mandarlo):'),
+      vista,
+      h('div', { class: 'columna-botones' },
+        h('button', { class: 'btn btn-principal btn-ancho', onClick: enviar }, 'Enviar a la oficina'),
+        varios ? h('button', {
+          class: 'btn btn-secundario btn-ancho',
+          onClick: async () => {
+            try { await exportarListaEncargo(encargo(), lista, fecha); } catch (err) { toast('No se pudo crear el Excel: ' + err.message, { duracion: 7000 }); }
+          },
+        }, 'Mandar también la lista en Excel') : null,
+        h('button', { class: 'btn btn-texto', onClick: () => panel.poner(elegir()) }, '‹ Elegir otro encargo')));
+  };
+
+  panel.poner(elegir());
+}
+
+// ---------------------------------------------------------------------
 //  Estados: semana que viene, vacaciones, baja, reactivar
 // ---------------------------------------------------------------------
 
@@ -496,6 +585,7 @@ export function menuCliente(cliente, fechaPrevista) {
       opcion('Semana que viene', () => { cerrar(); semanaQueViene(cliente); }),
       opcion('Registrar pedido', () => { cerrar(); registrarPedido(cliente); }),
       opcion('Recordatorio', () => { cerrar(); editarRecordatorio({ cliente }); }),
+      opcion('📌 Pedir a la oficina', () => { cerrar(); pedirAOficina(cliente); }),
       cliente.estado === 'potencial' ? opcion('Pasar a cliente', () => { cerrar(); pasarACliente(cliente); }) : null,
       opcion('Vacaciones', () => { cerrar(); vacaciones(cliente); }),
       opcion('Baja', () => { cerrar(); baja(cliente); }, 'peligro'),

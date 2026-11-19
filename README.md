@@ -6,7 +6,7 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - Los datos se guardan **solo en el móvil**. No hay servidor ni nube.
 - **Los datos de clientes nunca están en el código ni se suben a GitHub.** Se cargan en el móvil con el botón «Importar».
 
-**Estado:** fases 1 (Llamadas), 2 (Seguimiento), 3 (Oficina) y 4 (Ficha completa) terminadas. Versión 1.3.0.
+**Estado:** fases 1 (Llamadas), 2 (Seguimiento), 3 (Oficina), 4 (Ficha completa) y 5 (Encargos a la oficina) terminadas. Versión 1.4.0.
 
 **Qué hace la fase 2:**
 - **Registrar pedido** (ficha o menú ⋯): pedidos que llegan fuera de su día (llamó el cliente, WhatsApp o visita). Ese cliente ya no sale para llamar el resto de la semana.
@@ -29,6 +29,21 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - **Condiciones especiales:** descuentos o precios solo para un cliente (producto, condición, hasta cuándo y nota). Salen en su tarjeta de Hoy y al apuntar sus pedidos; las caducadas dejan de salir. La oficina las ve en el resumen del viernes («Condiciones nuevas») y en la hoja «Condiciones» del Excel semanal. Las promociones para todos siguen en «Promos».
 - **Repetir último pedido:** al apuntar un pedido, un botón copia el último que hizo ese cliente.
 - **Llamar a partir de:** una hora por cliente (por ejemplo, «el jefe llega a las 11»). Hasta esa hora, el cliente sale más abajo en Hoy.
+
+**Qué hace la fase 5:**
+- **«📌 Pedir a la oficina»** (en la ficha y en el menú ⋯): el comercial elige un encargo y a la **oficina** le llega un WhatsApp que empieza por «📌 ENCARGO» con los datos del cliente: nombre, código, población, contacto, su WhatsApp y su teléfono para llamar. Los encargos son:
+  - enviar el catálogo de Navidad;
+  - enviar el catálogo general;
+  - enviar la tarifa de precios;
+  - enviar la ficha de un producto (pregunta cuál);
+  - que le llame la oficina;
+  - revisar un cobro o una factura;
+  - otro (lo escribe él).
+
+  Se puede añadir una nota, y antes de enviar se ve el mensaje tal como llegará.
+- **A varios clientes a la vez:** en Clientes → «Seleccionar», se marcan los clientes y se pulsa «📌 Oficina». Llega un solo mensaje con la lista. Si son muchos, se puede mandar también la lista en Excel.
+- **Queda apuntado:** en la ficha de cada cliente («Pedido a la oficina»), en el resumen del viernes («Encargos a la oficina») y en la hoja «Encargos» del Excel semanal.
+- Va al **WhatsApp de la oficina** de Ajustes, el mismo de los pedidos. Si está vacío, se abre el menú de compartir.
 
 ---
 
@@ -173,8 +188,8 @@ Los datos están en el móvil (IndexedDB), **no** en los archivos de la app. Act
 
 1. Haz los cambios en los archivos.
 2. Sube el número de versión en **dos sitios** (el mismo número en los dos):
-   - `js/version.js` → `export const VERSION = '1.3.0';`
-   - `sw.js` → `const VERSION = '1.3.0';`
+   - `js/version.js` → `export const VERSION = '1.4.0';`
+   - `sw.js` → `const VERSION = '1.4.0';`
 3. Si has añadido un archivo nuevo de la app, añádelo también a la lista `ARCHIVOS` de `sw.js`.
 4. Pasa los tests: `node --test`.
 5. En GitHub Desktop: comprueba que en **Changes** no hay datos de clientes, escribe un resumen, pulsa **Commit to main** y luego **Push origin**.

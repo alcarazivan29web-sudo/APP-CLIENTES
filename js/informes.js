@@ -12,7 +12,7 @@ import {
   DIAS, DIAS_EXCEL, NOMBRE_ESTADO, NOMBRE_SITUACION, ORIGENES_PEDIDO,
   sumarDias, diasEntre, diaSemana, fechaCorta, fechaDeMarca, capitalizar, capitalizarPrimera,
   formatearTelefono, esFinal, calcularSemana, calcularRiesgo, ultimosPedidos,
-  recordatoriosDelDia, normalizarTexto, textoCondicion, faltaPorConfigurar, textoFalta,
+  recordatoriosDelDia, normalizarTexto, textoCondicion, faltaPorConfigurar, textoFalta, tituloEncargo,
 } from './logica.js';
 
 const dia3 = (f) => capitalizarPrimera(DIAS[diaSemana(f)]).slice(0, 3);
@@ -111,7 +111,7 @@ export function cambiosParaICG({ cambios, clientes, incluirEnviados = false }) {
 
 /** Junta todo lo que pasó en la semana del `lunes`, hasta `fecha` (si la semana
  *  no ha terminado) o hasta el domingo. */
-export function datosSemana({ clientes, llamadas, recordatorios = [], cambios = [], lunes, fecha, primerUso, semanasRiesgo = 3 }) {
+export function datosSemana({ clientes, llamadas, recordatorios = [], cambios = [], encargos = [], lunes, fecha, primerUso, semanasRiesgo = 3 }) {
   const domingo = sumarDias(lunes, 6);
   const viernes = sumarDias(lunes, 4);
   const fechaRef = fecha < domingo ? fecha : domingo;
@@ -166,7 +166,14 @@ export function datosSemana({ clientes, llamadas, recordatorios = [], cambios = 
     .filter((x) => enSemana(x.creada)).map((x) => ({ cliente: c, condicion: x })))
     .sort((a, b) => compararTexto(a.cliente.nombreComercial, b.cliente.nombreComercial));
 
+  // Encargos a la oficina de la semana (cada uno con sus clientes)
+  const encargosSemana = encargos
+    .filter((e) => !e.borrado && enSemana(e.fecha))
+    .map((e) => ({ encargo: e, clientes: (e.clienteIds || []).map((id) => porId.get(id)).filter(Boolean) }))
+    .sort((a, b) => `${a.encargo.fecha} ${a.encargo.hora}`.localeCompare(`${b.encargo.fecha} ${b.encargo.hora}`));
+
   return {
+    encargos: encargosSemana,
     lunes, viernes, domingo, fechaRef, terminada: fechaRef >= viernes, semana, pedidos, sinLlamar, riesgo,
     bajas, vacaciones, nuevosClientes, nuevosPotenciales, pasanACliente, potencialesLlamados,
     recordatoriosPendientes, cambiosICG: icg.filas, idsCambiosICG: icg.ids, condicionesNuevas,
@@ -218,6 +225,8 @@ export function textoResumenSemanal(d, comercial) {
   seccion('EN RIESGO', d.riesgo, (x) => `${nombreYPueblo(x.cliente)} · ${x.semanas} semanas sin pedir`);
   seccion('BAJAS NUEVAS', d.bajas, (c) => `${nombreYPueblo(c)}${c.motivoBaja ? ' · ' + c.motivoBaja : ''}`);
   seccion('VACACIONES', d.vacaciones, (c) => `${nombreYPueblo(c)} · ${c.vacacionesHasta ? 'vuelve el ' + fechaCorta(c.vacacionesHasta) : 'sin fecha de vuelta'}`);
+  seccion('ENCARGOS A LA OFICINA', d.encargos || [], (x) =>
+    `${tituloEncargo(x.encargo)} · ${x.clientes.length === 1 ? nombreYPueblo(x.clientes[0]) : `${x.clientes.length} clientes`} · ${dia3(x.encargo.fecha)} ${fechaCorta(x.encargo.fecha)}`, 30);
   seccion('CLIENTES NUEVOS', d.nuevosClientes, (c) => nombreYPueblo(c));
   seccion('POTENCIALES NUEVOS', d.nuevosPotenciales, (c) => nombreYPueblo(c));
   seccion('PASAN DE POTENCIAL A CLIENTE', d.pasanACliente, (c) => nombreYPueblo(c));
@@ -241,6 +250,7 @@ export const COLUMNAS_EXCEL_SEMANAL = {
   Resumen: ['Día', 'Fecha', 'Clientes del día', 'Llamados', 'Pide', 'No pide', 'No contesta', 'Sin llamar', 'Por llamar'],
   Llamadas: ['Fecha prevista', 'Día', 'Población', 'Resultado', 'Cómo', 'Nº intentos', 'Hora último intento', 'WhatsApp enviado', 'Apuntado el'],
   Pedidos: ['Fecha', 'Hora', 'Población', 'Cómo llegó', 'Pedido', 'Enviado a oficina', 'Hora de envío'],
+  Encargos: ['Fecha', 'Hora', 'Población', 'Encargo', 'Nota', 'Clientes en el encargo'],
   Clientes: ['Nombre fiscal', 'Población', 'Zona', 'Contacto', 'Días de llamada', 'Estado', 'Importante', 'Último pedido',
     'Semanas sin pedir', 'En riesgo', 'Cobro pendiente €', 'Nota del cobro', 'Pide habitualmente', 'Condiciones',
     'Llamar a partir de', 'Condiciones especiales', 'Falta por configurar', 'Id interno'],
@@ -296,6 +306,9 @@ export function hojasExcelSemanal(d, comercial) {
 
   crear('Pedidos', d.pedidos.map((p) => [...pre(p.cliente), p.fecha, p.hora, p.cliente.poblacion || '',
     textoOrigen(p.registro.origen), p.registro.pedido || '', siNo(p.registro.enviadoOficina), marcaEnvio(p.registro.horaEnviadoOficina)]));
+
+  crear('Encargos', (d.encargos || []).flatMap((x) => x.clientes.map((c) => [...pre(c), x.encargo.fecha, x.encargo.hora || '',
+    c.poblacion || '', tituloEncargo(x.encargo), x.encargo.nota || '', x.clientes.length])));
 
   crear('Clientes', [...d.clientes]
     .sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true }) || compararTexto(a.nombreComercial, b.nombreComercial))

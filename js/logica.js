@@ -301,11 +301,13 @@ export function telefonosDe(c) {
   }));
 }
 
-/** Teléfonos que sirven para 'llamar' o para 'whatsapp'. Si ninguno está marcado
- *  para eso, se devuelven todos (para no dejar al comercial sin poder llamar). */
+/** Teléfonos que sirven para 'llamar' o para 'whatsapp'. Primero los marcados
+ *  expresamente para eso («Solo WhatsApp» va antes que «Llamar y WhatsApp»).
+ *  Si ninguno sirve, se devuelven todos (para no dejar al comercial sin poder llamar). */
 export function telefonosPara(c, para) {
   const todos = telefonosDe(c);
-  const vale = todos.filter((t) => t.uso === 'todo' || t.uso === para);
+  const vale = todos.filter((t) => t.uso === 'todo' || t.uso === para)
+    .sort((a, b) => (a.uso === para ? 0 : 1) - (b.uso === para ? 0 : 1));
   return vale.length ? vale : todos;
 }
 
@@ -393,6 +395,68 @@ export function ultimoPedidoConTexto(llamadasCliente, antesDe = null) {
     .filter((r) => !r.borrado && r.resultado === 'pide' && r.pedido && r.pedido.trim() && (!antesDe || (r.fecha || r.fechaPrevista) < antesDe))
     .sort((a, b) => (b.fecha || b.fechaPrevista || '').localeCompare(a.fecha || a.fechaPrevista || '') ||
       String(b.modificado || '').localeCompare(String(a.modificado || '')))[0] || null;
+}
+
+// ---------------------------------------------------------------------
+//  Encargos a la oficina (fase 5)
+// ---------------------------------------------------------------------
+
+/** Lista de encargos. `pide`: 'producto' o 'texto' si hace falta escribir algo. */
+export const TIPOS_ENCARGO = [
+  { id: 'catalogo_navidad', icono: '📕', texto: 'Enviar catálogo de Navidad' },
+  { id: 'catalogo_general', icono: '📗', texto: 'Enviar catálogo general' },
+  { id: 'tarifa', icono: '💶', texto: 'Enviar tarifa de precios' },
+  { id: 'ficha_producto', icono: '🍷', texto: 'Enviar ficha de un producto', pide: 'producto' },
+  { id: 'llamar_oficina', icono: '📞', texto: 'Que le llame la oficina' },
+  { id: 'cobro', icono: '🧾', texto: 'Revisar un cobro o una factura' },
+  { id: 'otro', icono: '✏️', texto: 'Otro', pide: 'texto' },
+];
+export const tipoEncargo = (id) => TIPOS_ENCARGO.find((t) => t.id === id) || { id, icono: '📌', texto: id || 'Encargo' };
+
+/** Un encargo puede ser de un cliente o de varios a la vez (clienteIds). */
+export function encargoVacio() {
+  return {
+    tipo: '', detalle: '', nota: '', clienteIds: [], fecha: null, hora: null, enviadoPor: '',
+    borrado: false, fechaBorrado: null,
+  };
+}
+
+/** 'Enviar ficha de un producto: Xoringer' · 'Otro' → lo que se escribió */
+export function tituloEncargo(e) {
+  const t = tipoEncargo(e.tipo);
+  if (t.pide === 'texto') return e.detalle || t.texto;
+  return t.texto + (e.detalle ? `: ${e.detalle}` : '');
+}
+
+/** Mensaje de WhatsApp para la oficina. Empieza siempre por «📌 ENCARGO». */
+export function mensajeEncargo({ encargo, clientes, comercial, fecha, hora }) {
+  const L = [`📌 ENCARGO · ${comercial || 'Comercial'}`];
+  const nombre = (c) => capitalizar(c.nombreComercial) + (c.codigo ? ` (${c.codigo})` : '');
+  const tels = (c) => {
+    const wa = telefonosPara(c, 'whatsapp')[0];
+    const ll = telefonosPara(c, 'llamar')[0];
+    return { wa, ll: ll && ll.numero !== wa?.numero ? ll : null };
+  };
+  if (clientes.length === 1) {
+    const c = clientes[0];
+    const t = tels(c);
+    L.push(tituloEncargo(encargo));
+    L.push(`Cliente: ${nombre(c)}${c.poblacion ? ' · ' + capitalizar(c.poblacion) : ''}`);
+    if (c.contacto) L.push(`Contacto: ${capitalizar(c.contacto)}`);
+    if (t.wa) L.push(`WhatsApp: ${textoTelefono(t.wa)}`);
+    if (t.ll) L.push(`Teléfono: ${textoTelefono(t.ll)}`);
+    if (!t.wa && !t.ll) L.push('Sin teléfono en la app');
+  } else {
+    L.push(`${tituloEncargo(encargo)} · ${clientes.length} clientes:`);
+    clientes.forEach((c, i) => {
+      const t = tels(c);
+      L.push(`${i + 1}. ` + [nombre(c), c.poblacion && capitalizar(c.poblacion), c.contacto && capitalizar(c.contacto),
+        t.wa ? `WhatsApp ${textoTelefono(t.wa)}` : 'sin teléfono'].filter(Boolean).join(' · '));
+    });
+  }
+  if (encargo.nota && encargo.nota.trim()) L.push(`Nota: ${encargo.nota.trim()}`);
+  L.push(`— ${DIAS[diaSemana(fecha)]} ${fechaCorta(fecha)} ${hora}`);
+  return L.join('\n');
 }
 
 export function registroVacio() {

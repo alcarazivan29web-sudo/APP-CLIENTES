@@ -8,6 +8,7 @@ import {
   faltaPorConfigurar, textoFalta,
 } from '../logica.js';
 import { h, hoja, toast, selectorDias } from '../ui.js';
+import { pedirAOficina } from '../acciones.js';
 
 const FILTROS_INICIALES = {
   texto: '', dia: '', zona: '', poblacion: '', estado: 'sin_baja', importantes: false, riesgo: false, cobro: false,
@@ -110,8 +111,14 @@ export function render(cont, ctx) {
 
   const pie = seleccionando
     ? h('div', { class: 'pie-accion' },
-      h('button', { class: 'btn btn-secundario', onClick: () => { seleccionando = false; seleccion.clear(); ctx.refrescar(); } }, 'Cancelar'),
-      h('button', { class: 'btn btn-principal', disabled: !seleccion.size, onClick: () => asignarDias(ctx) }, `Asignar día (${seleccion.size})`))
+      h('button', { class: 'btn btn-secundario btn-cancelar-sel', onClick: () => { seleccionando = false; seleccion.clear(); ctx.refrescar(); } }, 'Cancelar'),
+      h('button', { class: 'btn btn-principal', disabled: !seleccion.size, onClick: () => asignarDias(ctx) }, `Asignar día (${seleccion.size})`),
+      h('button', {
+        class: 'btn btn-oficina', disabled: !seleccion.size,
+        onClick: () => pedirAOficina(todos.filter((c) => seleccion.has(c.id)), {
+          alTerminar: () => { seleccionando = false; seleccion.clear(); ctx.refrescar(); },
+        }),
+      }, `📌 Oficina (${seleccion.size})`))
     : h('button', { class: 'fab', 'aria-label': 'Añadir cliente', onClick: () => ctx.abrirFicha(null) }, '+');
 
   cont.replaceChildren(...[

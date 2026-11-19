@@ -10,11 +10,11 @@
 //    3. Añade un test en tests/migraciones.test.js.
 // =====================================================================
 
-import { clienteVacio, registroVacio, ajustesVacios, recordatorioVacio, promocionVacia } from './logica.js';
+import { clienteVacio, registroVacio, ajustesVacios, recordatorioVacio, promocionVacia, encargoVacio } from './logica.js';
 
-export const ESQUEMA_ACTUAL = 2;
+export const ESQUEMA_ACTUAL = 3;
 export const FORMATO_COPIA = 'llamadas-vinoliva';
-export const COLECCIONES = ['clientes', 'llamadas', 'recordatorios', 'promociones', 'cambios', 'ajustes'];
+export const COLECCIONES = ['clientes', 'llamadas', 'recordatorios', 'promociones', 'encargos', 'cambios', 'ajustes'];
 
 function rellenar(base, obj) {
   const out = { ...base, ...obj };
@@ -27,6 +27,7 @@ export const completarCliente = (c) => rellenar(clienteVacio(), c);
 export const completarRegistro = (r) => rellenar(registroVacio(), r);
 export const completarRecordatorio = (r) => rellenar(recordatorioVacio(), r);
 export const completarPromocion = (p) => rellenar(promocionVacia(), p);
+export const completarEncargo = (e) => rellenar(encargoVacio(), e);
 export const completarAjustes = (a) => {
   const base = ajustesVacios();
   return { ...rellenar(base, a), plantillas: { ...base.plantillas, ...(a.plantillas || {}) } };
@@ -47,6 +48,11 @@ export const MIGRACIONES = {
   2: (d) => ({
     ...d,
     clientes: d.clientes.map(completarCliente),
+  }),
+  // Versión 3 (app 1.4.0, fase 5): nueva colección «encargos» (pedidos a la oficina).
+  3: (d) => ({
+    ...d,
+    encargos: d.encargos.map(completarEncargo),
   }),
 };
 

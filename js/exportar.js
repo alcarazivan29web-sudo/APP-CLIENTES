@@ -5,6 +5,7 @@
 import * as datos from './datos.js';
 import {
   DIAS_EXCEL, NOMBRE_ESTADO, fechaNormal, telefonosConNombre, textoCondicion, faltaPorConfigurar, textoFalta,
+  tituloEncargo, telefonosPara, textoTelefono,
 } from './logica.js';
 import {
   hojasExcelSemanal, nombreExcelSemanal, filasHistorial, nombreArchivoComercial, COLUMNAS_COMUNES,
@@ -78,6 +79,21 @@ export async function exportarCambiosICG(filasICG, fecha) {
   ];
   const blob = libroVariasHojas({ 'Cambios ICG': filas });
   return compartirArchivo(blob, `cambios_icg_${fecha}_${nombreArchivoComercial(comercial)}.xlsx`, 'Cambios para ICG');
+}
+
+/** Lista de clientes de un encargo (cuando son muchos, la oficina lo tiene más cómodo en Excel). */
+export function filasListaEncargo(encargo, clientes, comercial) {
+  const cab = ['Comercial', 'Fecha', 'Encargo', 'Nota', 'Código', 'Cliente', 'Población', 'Contacto', 'WhatsApp', 'Teléfono para llamar'];
+  return [cab, ...clientes.map((c) => [comercial, encargo.fecha, tituloEncargo(encargo), encargo.nota || '', c.codigo || '',
+    c.nombreComercial, c.poblacion || '', c.contacto || '',
+    telefonosPara(c, 'whatsapp')[0] ? textoTelefono(telefonosPara(c, 'whatsapp')[0]) : '',
+    telefonosPara(c, 'llamar')[0] ? textoTelefono(telefonosPara(c, 'llamar')[0]) : ''])];
+}
+
+export async function exportarListaEncargo(encargo, clientes, fecha) {
+  const comercial = datos.obtenerAjustes().nombreComercial || 'Comercial';
+  const blob = libroVariasHojas({ Encargo: filasListaEncargo(encargo, clientes, comercial) });
+  return compartirArchivo(blob, `encargo_${fecha}_${nombreArchivoComercial(comercial)}.xlsx`, 'Encargo para la oficina');
 }
 
 export async function exportarClientesExcel(fecha) {

@@ -9,6 +9,7 @@ import {
   NOMBRE_SITUACION, horaDeMarca, capitalizarPrimera, diaSemana, analizarHora, lunesDe,
   ORIGENES_PEDIDO, calcularRiesgo, textoRiesgo, fechaCorta, formatearImporte,
   telefonosDe, USOS_TELEFONO, NOMBRES_TELEFONO, faltaPorConfigurar, NOMBRE_DATO, condicionVacia, textoCondicion,
+  tituloEncargo, tipoEncargo,
 } from '../logica.js';
 import { h, hoja, pantallaCompleta, confirmar, toast, selectorDias } from '../ui.js';
 
@@ -151,6 +152,10 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
   const otrasAcciones = esNuevo ? null : h('div', { class: 'fila-botones' },
     h('button', { class: 'btn btn-secundario', onClick: () => acciones.registrarPedido(c) }, 'Registrar pedido'),
     h('button', { class: 'btn btn-secundario', onClick: () => acciones.editarRecordatorio({ cliente: c }) }, '+ Recordatorio'));
+  const botonOficina = esNuevo ? null : h('button', {
+    class: 'btn btn-oficina btn-ancho', onClick: () => acciones.pedirAOficina(c, { alTerminar: repintar }),
+  }, '📌 Pedir a la oficina');
+  const encargos = esNuevo ? null : seccionEncargos(c, repintar);
   const recordatorios = esNuevo ? null : seccionRecordatorios(c, fecha);
   const condiciones = esNuevo ? null : seccionCondiciones(ctx, c, fecha, repintar);
 
@@ -193,8 +198,10 @@ function contenido(ctx, c, esNuevo, cerrar, repintar) {
     bloqueFalta,
     contacto,
     otrasAcciones,
+    botonOficina,
     recordatorios,
     condiciones,
+    encargos,
     h('section', { class: 'ficha-form' },
       selTipo ? h('div', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, '¿Es cliente o potencial?'), selTipo) : null,
       f.nombreComercial.grupo,
@@ -408,4 +415,32 @@ function editarCondicion(ctx, cliente, condicion, repintar) {
   });
   if (!condicion) setTimeout(() => producto.focus(), 250);
   return p;
+}
+
+// ---------------------------------------------------------------------
+//  Encargos a la oficina de este cliente
+// ---------------------------------------------------------------------
+
+function seccionEncargos(c, repintar) {
+  const lista = datos.encargosDeCliente(c.id);
+  if (!lista.length) return null;
+  const fila = (e) => h('button', {
+    class: 'fila-encargo',
+    onClick: async () => {
+      if (!await confirmar(`¿Quitar «${tituloEncargo(e)}» del historial? (A la oficina ya le llegó; esto solo lo borra de la app.)`,
+        { ok: 'Quitar', titulo: 'Encargo' })) return;
+      await datos.borrarEncargo(e.id);
+      toast('Encargo quitado del historial');
+      repintar();
+    },
+  },
+  h('span', { class: 'fe-fecha' }, `${capitalizarPrimera(DIAS[diaSemana(e.fecha)]).slice(0, 3)} ${fechaNormal(e.fecha)}`),
+  h('span', { class: 'fe-texto' }, `${tipoEncargo(e.tipo).icono} ${tituloEncargo(e)}`),
+  e.nota || (e.clienteIds || []).length > 1 ? h('span', { class: 'fe-detalle' },
+    [(e.clienteIds || []).length > 1 ? `Junto con ${(e.clienteIds.length - 1)} ${e.clienteIds.length === 2 ? 'cliente más' : 'clientes más'}` : '', e.nota]
+      .filter(Boolean).join(' · ')) : null);
+  return h('section', { class: 'ficha-encargos' },
+    h('h3', {}, `Pedido a la oficina (${lista.length})`),
+    lista.slice(0, 5).map(fila),
+    lista.length > 5 ? h('details', {}, h('summary', {}, `Ver ${lista.length - 5} más`), lista.slice(5, 60).map(fila)) : null);
 }

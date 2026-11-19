@@ -459,3 +459,20 @@ body.con-banda .pc-cabecera { top: 22px; }
 .ayudas-pedido .texto-ayuda { margin: 0; }
 .ultimo-pedido { white-space: pre-wrap; background: var(--fondo); border-radius: 10px; padding: 6px 10px; }
 .ficha-condiciones .cabecera-fila .btn { flex: 0 0 auto; white-space: nowrap; }
+
+/* ---------- Fase 5 · Encargos a la oficina ---------- */
+.btn-oficina { background: var(--dorado); color: var(--azul-osc); border-color: var(--dorado); }
+.ficha > .btn-oficina { margin: 4px 0 10px; }
+.lista-encargos { margin: 8px 0 6px; }
+.btn-encargo { justify-content: flex-start; gap: 12px; text-align: left; }
+.enc-icono { font-size: 22px; width: 28px; text-align: center; flex: 0 0 auto; }
+.titulo-encargo { margin: 0 0 12px; color: var(--azul); font-size: 19px; }
+.vista-encargo { white-space: pre-wrap; word-break: break-word; font-family: inherit; margin: 6px 0 12px; max-height: 40vh; overflow: auto; }
+.ficha-encargos { margin: 6px 0 12px; }
+.ficha-encargos h3 { color: var(--azul); margin: 14px 0 8px; }
+.fila-encargo { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; width: 100%; min-height: 48px; text-align: left; background: var(--blanco); border: 1px solid var(--borde); border-left: 6px solid var(--dorado); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-size: 16px; cursor: pointer; color: var(--texto); }
+.fe-fecha { color: var(--texto-2); font-weight: 650; white-space: nowrap; }
+.fe-texto { font-weight: 650; word-break: break-word; }
+.fe-detalle { grid-column: 2; color: var(--texto-2); font-size: 14px; }
+.pie-accion .btn { padding-left: 8px; padding-right: 8px; }
+.pie-accion .btn-cancelar-sel { flex: 0 0 auto; }

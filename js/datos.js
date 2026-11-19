@@ -14,14 +14,14 @@ import { marcaTiempo, ajustesVacios, fechaDeMarca } from './logica.js';
 import { ESQUEMA_ACTUAL, COLECCIONES, migrar, crearCopia, leerCopia, completarAjustes } from './migraciones.js';
 import { VERSION } from './version.js';
 
-const VERSION_IDB = 1; // versión de la estructura de tablas de IndexedDB
+const VERSION_IDB = 2; // versión de la estructura de tablas de IndexedDB
 const CAMPOS_TECNICOS = new Set(['id', 'creado', 'modificado', 'dispositivoId']);
 
 let db = null;
 let nombreBase = '';
 let dispositivoId = '';
 let relojAhora = () => new Date();
-const cache = { clientes: new Map(), llamadas: new Map(), recordatorios: new Map(), promociones: new Map() };
+const cache = { clientes: new Map(), llamadas: new Map(), recordatorios: new Map(), promociones: new Map(), encargos: new Map() };
 let indiceRegistros = new Map(); // `${clienteId}|${fechaPrevista}` → id
 let ajustes = null;
 
@@ -54,7 +54,11 @@ function abrirIDB(nombre) {
         b.createObjectStore('ajustes', { keyPath: 'id' });
         b.createObjectStore('meta', { keyPath: 'clave' });
       }
-      // Futuras versiones de tablas: if (ev.oldVersion < 2) { … }
+      if (ev.oldVersion < 2) {
+        // Fase 5: encargos a la oficina (un encargo puede llevar varios clientes)
+        b.createObjectStore('encargos', { keyPath: 'id' }).createIndex('clienteIds', 'clienteIds', { multiEntry: true });
+      }
+      // Futuras versiones de tablas: if (ev.oldVersion < 3) { … }
     };
     req.onsuccess = () => ok(req.result);
     req.onerror = () => mal(req.error);
@@ -136,7 +140,7 @@ export async function iniciar({ prueba = false, reloj = () => new Date() } = {})
 }
 
 function cargarCache(datos) {
-  for (const k of ['clientes', 'llamadas', 'recordatorios', 'promociones']) {
+  for (const k of ['clientes', 'llamadas', 'recordatorios', 'promociones', 'encargos']) {
     cache[k] = new Map(datos[k].map((o) => [o.id, o]));
   }
   ajustes = datos.ajustes.find((a) => a.id === 'ajustes') || null;
@@ -366,6 +370,31 @@ export async function reemplazarPromociones(nuevas) {
   const marca = ahora();
   const viejas = obtenerPromociones().map((p) => ({ ...p, borrado: true, fechaBorrado: marca }));
   return guardar('promociones', [...viejas, ...nuevas], { origen: 'importacion' });
+}
+
+// ---------------------------------------------------------------------
+//  Encargos a la oficina
+// ---------------------------------------------------------------------
+
+export function obtenerEncargos() {
+  const out = [];
+  for (const e of cache.encargos.values()) if (!e.borrado) out.push(e);
+  return out.sort((a, b) => String(b.creado).localeCompare(String(a.creado)));
+}
+
+export function encargosDeCliente(clienteId) {
+  return obtenerEncargos().filter((e) => (e.clienteIds || []).includes(clienteId));
+}
+
+export async function guardarEncargo(e) {
+  return (await guardar('encargos', [e]))[0];
+}
+
+/** Borrado suave (solo lo quita del historial de la app). */
+export async function borrarEncargo(id) {
+  const e = cache.encargos.get(id);
+  if (!e) return null;
+  return guardarEncargo({ ...e, borrado: true, fechaBorrado: ahora() });
 }
 
 // ---------------------------------------------------------------------

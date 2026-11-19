@@ -114,7 +114,7 @@ async function cargarSemana(ctx, lunes) {
   const { fecha } = ctx.reloj.ahoraFH();
   return datosSemana({
     clientes: datos.obtenerClientes({ incluirBorrados: true }), llamadas: datos.obtenerLlamadas(),
-    recordatorios: datos.obtenerRecordatorios(), cambios: await datos.obtenerCambios(),
+    recordatorios: datos.obtenerRecordatorios(), cambios: await datos.obtenerCambios(), encargos: datos.obtenerEncargos(),
     lunes, fecha, primerUso: aj.primerUso, semanasRiesgo: aj.semanasRiesgo,
   });
 }

@@ -33,7 +33,7 @@ test('teléfonos: nombre y uso; para llamar y para WhatsApp', () => {
   assert.deepEqual(telefonosDe(c).map((t) => [t.numero, t.nombre, t.uso]),
     [['600111222', 'Jefe', 'llamar'], ['965000000', '', 'todo'], ['611222333', 'Pedidos', 'whatsapp']]);
   assert.deepEqual(telefonosPara(c, 'llamar').map((t) => t.numero), ['600111222', '965000000']);
-  assert.deepEqual(telefonosPara(c, 'whatsapp').map((t) => t.numero), ['965000000', '611222333']);
+  assert.deepEqual(telefonosPara(c, 'whatsapp').map((t) => t.numero), ['611222333', '965000000'], 'primero el de «Solo WhatsApp»');
   assert.equal(textoTelefono(telefonosDe(c)[0]), 'Jefe · 600 111 222');
   assert.equal(textoTelefono(telefonosDe(c)[1]), '965 000 000');
 });
@@ -190,7 +190,7 @@ test('resumen semanal: condiciones nuevas de la semana y hoja «Condiciones»', 
 // ---------------------------------------------------------------------
 
 test('migración 1 → 2: los clientes reciben los campos nuevos y no pierden nada', () => {
-  assert.equal(ESQUEMA_ACTUAL, 2);
+  assert.ok(ESQUEMA_ACTUAL >= 2);
   const v1 = { ...clienteVacio(), id: 'a1', nombreComercial: 'BAR', telefonos: ['600111222'], diasLlamada: [1], condiciones: '10% Xoringer' };
   delete v1.telefonosInfo; delete v1.llamarDesde; delete v1.condicionesEspeciales;
   const d = migrar({ clientes: [v1], llamadas: [{ id: 'r1', pedido: 'x' }] }, 1, 2);
