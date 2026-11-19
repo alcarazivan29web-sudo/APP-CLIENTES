@@ -474,6 +474,18 @@ export function idMensajeOficina(m) {
   return 'm' + x.toString(36);
 }
 
+/** ¿Se puede exportar con este nombre de comercial?
+ *  { ok, motivo: ''|'vacio'|'fuera_lista', sugerido } — sugerido: el de la lista
+ *  que se escribe igual salvo mayúsculas o acentos. */
+export function comprobarComercial(aj) {
+  const nombre = String(aj?.nombreComercial || '').trim();
+  const lista = (aj?.comerciales || []).filter(Boolean);
+  if (!nombre) return { ok: false, motivo: 'vacio', sugerido: '' };
+  if (!lista.length || lista.includes(nombre)) return { ok: true, motivo: '', sugerido: '' };
+  const sugerido = lista.find((n) => normalizarTexto(n) === normalizarTexto(nombre)) || '';
+  return { ok: false, motivo: 'fuera_lista', sugerido };
+}
+
 /** Mensajes que se ven en una fecha (las fechas son opcionales). */
 export function mensajesVigentes(mensajes, fecha) {
   return (mensajes || []).filter((m) => m && m.texto && (!m.desde || m.desde <= fecha) && (!m.hasta || m.hasta >= fecha));
@@ -551,6 +563,7 @@ export function ajustesVacios() {
     // Fase 6 · lo que manda la oficina en su Excel
     tiposEncargo: [], mensajesOficina: [], mensajesVistos: [], excelOficina: null,
     ultimoCRM: null, // fase 7: último «Exportar para el CRM»
+    comerciales: [], // fase 7: lista cerrada de comerciales (llega en el Excel de la oficina)
   };
 }
 

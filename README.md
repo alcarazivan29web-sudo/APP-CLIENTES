@@ -6,7 +6,7 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - Los datos se guardan **solo en el móvil**. No hay servidor ni nube.
 - **Los datos de clientes nunca están en el código ni se suben a GitHub.** Se cargan en el móvil con el botón «Importar».
 
-**Estado:** fases 1 (Llamadas), 2 (Seguimiento), 3 (Oficina), 4 (Ficha completa), 5 (Encargos a la oficina) y 6 (La oficina manda) terminadas. Fase 7 (conexión con el CRM de la oficina) en marcha. Versión 1.7.0.
+**Estado:** fases 1 (Llamadas), 2 (Seguimiento), 3 (Oficina), 4 (Ficha completa), 5 (Encargos a la oficina) y 6 (La oficina manda) terminadas. Fase 7 (conexión con el CRM de la oficina) en marcha. Versión 1.8.0.
 
 **Qué hace la fase 2:**
 - **Registrar pedido** (ficha o menú ⋯): pedidos que llegan fuera de su día (llamó el cliente, WhatsApp o visita). Ese cliente ya no sale para llamar el resto de la semana.
@@ -46,13 +46,16 @@ App para el móvil Android del comercial. Al abrirla ve **a quién tiene que lla
 - Va al **WhatsApp de la oficina** de Ajustes, el mismo de los pedidos. Si está vacío, se abre el menú de compartir.
 
 **Qué hace la fase 6:**
-- **Un solo Excel de la oficina** (`Excel_oficina_plantilla.xlsx`, en `datos-privados/`) con cuatro hojas: **Promociones**, **Encargos** (la lista de cosas que el comercial puede pedir a la oficina), **Mensaje** (el aviso de la semana) y **Números** (WhatsApp de la oficina y el tuyo). En la app: **Más → «Importar Excel de la oficina»**. Antes de importar, la app enseña qué cambia. Un Excel antiguo de solo promociones también vale.
+- **Un solo Excel de la oficina** (`Excel_oficina_plantilla.xlsx`, en `datos-privados/`) con cinco hojas: **Promociones**, **Encargos** (la lista de cosas que el comercial puede pedir a la oficina), **Mensaje** (el aviso de la semana), **Números** (WhatsApp de la oficina y el tuyo) y **Comerciales** (la lista de nombres). En la app: **Más → «Importar Excel de la oficina»**. Antes de importar, la app enseña qué cambia. Un Excel antiguo de solo promociones también vale.
 - **Mensaje de la oficina:** sale arriba en Hoy («📣 Mensaje de la oficina») hasta que el comercial pulsa **Entendido**. Puede tener fechas «desde» y «hasta». Se vuelve a ver en Más → «Ver mensaje de la oficina».
 - **Lista de encargos de la oficina:** si el Excel trae la hoja Encargos, el botón «📌 Pedir a la oficina» enseña esa lista. Siempre queda una opción para escribir libremente. Los encargos ya enviados conservan su nombre aunque cambie la lista.
 - **Versión de cierre preparada y apagada:** ver el apartado 8.
 
 **Fase 7 (en marcha) · Conexión con el CRM de la oficina:**
 - **Más → Para la oficina → «Exportar para el CRM»:** un Excel con todos los clientes y todo el historial de llamadas y pedidos, con formato fijo (hojas Info, Clientes y Llamadas). El comercial lo manda a la oficina y el CRM lo importa sin duplicar. El formato está en [`docs/FORMATO_EXCEL_CRM.md`](docs/FORMATO_EXCEL_CRM.md).
+  - Antes de exportar, la app comprueba el nombre del comercial: si está vacío o no está en la lista de la oficina, no deja exportar y lleva a Ajustes. Si está bien, pregunta «Vas a exportar como … ¿Es tu nombre?».
+- **Lista cerrada de comerciales:** la oficina la manda en la hoja **Comerciales** de su Excel. En **Más → Ajustes**, cada comercial elige su nombre de la lista, así se escribe siempre igual en el CRM.
+- **Al restaurar una copia en un móvil nuevo**, la app avisa de que a partir de ese momento hay que trabajar y exportar solo desde ese móvil.
 - La ficha del cliente tiene **Dirección** y **Email** (con botón «Correo»). Se importan y exportan en el Excel de clientes (columnas «Dirección» y «Email», también valen «Correo», «Domicilio»…) y salen en la hoja Clientes del Excel semanal.
 
 ---
@@ -163,6 +166,7 @@ Funciona sin conexión. Solo hace falta internet para enviar WhatsApps.
    - **Encargos:** uno por fila. «Hay que escribir»: vacío, «Producto» o «Texto». «Icono» es opcional. Viene rellena con la lista actual.
    - **Mensaje:** el aviso de la semana, con Desde y Hasta opcionales. Para varias líneas dentro de una celda: Alt + Intro.
    - **Números:** WhatsApp de la oficina y el tuyo. Solo cambian si los rellenas.
+   - **Comerciales:** un nombre por fila, tal como quieres que salga en el CRM. Cada comercial elige el suyo en Ajustes.
 2. Las filas que empiecen por **EJEMPLO** se ignoran: puedes dejarlas como guía.
 3. Mándale el Excel por WhatsApp o correo y que lo abra o descargue en el móvil.
 4. En la app: **Más → «Importar Excel de la oficina»**. Verá qué cambia y pulsará **Importar**.
@@ -170,7 +174,8 @@ Funciona sin conexión. Solo hace falta internet para enviar WhatsApps.
    - las **promociones** sustituyen a todas las anteriores (manda siempre todas las vigentes). Si la hoja no trae ninguna, se quedan las de antes;
    - la **lista de encargos** sustituye a la anterior. Si la hoja está vacía, se queda la de antes;
    - los **mensajes** sustituyen a los anteriores. Si la hoja Mensaje está vacía, se quita el mensaje;
-   - los **números** solo cambian si vienen rellenos.
+   - los **números** solo cambian si vienen rellenos;
+   - la **lista de comerciales** sustituye a la anterior. Si la hoja está vacía, se queda la de antes.
 
 **Ojo:** no cambies los nombres de las hojas ni de las columnas.
 
@@ -208,8 +213,8 @@ Los datos están en el móvil (IndexedDB), **no** en los archivos de la app. Act
 
 1. Haz los cambios en los archivos.
 2. Sube el número de versión en **dos sitios** (el mismo número en los dos):
-   - `js/version.js` → `export const VERSION = '1.7.0';`
-   - `sw.js` → `const VERSION = '1.7.0';`
+   - `js/version.js` → `export const VERSION = '1.8.0';`
+   - `sw.js` → `const VERSION = '1.8.0';`
 3. Si has añadido un archivo nuevo de la app, añádelo también a la lista `ARCHIVOS` de `sw.js`.
 4. Pasa los tests: `node --test`.
 5. En GitHub Desktop: comprueba que en **Changes** no hay datos de clientes, escribe un resumen, pulsa **Commit to main** y luego **Push origin**.

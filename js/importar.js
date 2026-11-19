@@ -370,11 +370,30 @@ export function filasANumeros(filas) {
   return { numeros, avisos };
 }
 
+/** Hoja «Comerciales»: un nombre por fila (columna «Comercial» o la primera). */
+export function filasAComerciales(filas) {
+  const avisos = [];
+  const iCab = (filas || []).findIndex((f) => ['COMERCIAL', 'COMERCIALES', 'NOMBRE'].includes(normalizarTexto((f || [])[0])));
+  const nombres = [];
+  const vistos = new Set();
+  (filas || []).forEach((f, i) => {
+    if (i <= iCab) return;
+    const n = texto((f || [])[0]).replace(/\s+/g, ' ');
+    if (!n || esEjemplo(n)) return;
+    const k = normalizarTexto(n);
+    if (vistos.has(k)) { avisos.push(`Fila ${i + 1}: «${n}» está repetido.`); return; }
+    vistos.add(k);
+    nombres.push(n);
+  });
+  return { comerciales: nombres, avisos };
+}
+
 const HOJAS_OFICINA = {
   promociones: ['PROMOCIONES', 'PROMOS', 'PROMOCION'],
   encargos: ['ENCARGOS', 'ENCARGO', 'LISTA DE ENCARGOS'],
   mensajes: ['MENSAJE', 'MENSAJES', 'MENSAJE DE LA SEMANA', 'MENSAJE DE LA OFICINA'],
   numeros: ['NUMEROS', 'TELEFONOS', 'CONTACTOS'],
+  comerciales: ['COMERCIALES', 'LISTA DE COMERCIALES'],
 };
 
 /** Libro completo { nombreHoja: filas } → lo que trae cada hoja (o null si no viene).
@@ -382,13 +401,14 @@ const HOJAS_OFICINA = {
 export function analizarExcelOficina(libro, { fecha = null } = {}) {
   const nombres = Object.keys(libro || {});
   const hoja = (k) => nombres.find((n) => HOJAS_OFICINA[k].includes(normalizarTexto(n)));
-  const r = { promociones: null, encargos: null, mensajes: null, numeros: null };
+  const r = { promociones: null, encargos: null, mensajes: null, numeros: null, comerciales: null };
   let nPromos = hoja('promociones');
-  if (!nPromos && !hoja('encargos') && !hoja('mensajes') && !hoja('numeros') && nombres.length) nPromos = nombres[0];
+  if (!nPromos && !hoja('encargos') && !hoja('mensajes') && !hoja('numeros') && !hoja('comerciales') && nombres.length) nPromos = nombres[0];
   if (nPromos) r.promociones = filasAPromociones(libro[nPromos], { fecha });
   if (hoja('encargos')) r.encargos = filasAEncargos(libro[hoja('encargos')]);
   if (hoja('mensajes')) r.mensajes = filasAMensajes(libro[hoja('mensajes')]);
   if (hoja('numeros')) r.numeros = filasANumeros(libro[hoja('numeros')]);
+  if (hoja('comerciales')) r.comerciales = filasAComerciales(libro[hoja('comerciales')]);
   return r;
 }
 
@@ -404,7 +424,7 @@ export function planExcelOficina(analisis, { ajustes, promocionesActuales = 0, f
   const guardar = {};
   let promociones = null;
   const a = analisis;
-  for (const k of ['promociones', 'encargos', 'mensajes', 'numeros']) if (a[k]?.avisos?.length) avisos.push(...a[k].avisos);
+  for (const k of ['promociones', 'encargos', 'mensajes', 'numeros', 'comerciales']) if (a[k]?.avisos?.length) avisos.push(...a[k].avisos);
   if (a.promociones) {
     const n = a.promociones.promociones.length;
     if (n) {
@@ -448,6 +468,22 @@ export function planExcelOficina(analisis, { ajustes, promocionesActuales = 0, f
       const igual = String(ajustes[k] || '').replace(/\s/g, '') === String(v).replace(/\s/g, '');
       if (!igual) guardar[k] = v;
       cambios.push({ tipo: 'numeros', texto: `${nombres[k]}: ${v}`, detalle: igual ? '' : (ajustes[k] ? `Antes: ${ajustes[k]}` : 'Antes estaba vacío'), sinCambio: igual });
+    }
+  }
+  if (a.comerciales) {
+    const lista = a.comerciales.comerciales;
+    if (lista.length) {
+      const igual = JSON.stringify(ajustes.comerciales || []) === JSON.stringify(lista);
+      if (!igual) guardar.comerciales = lista;
+      const nombre = String(ajustes.nombreComercial || '').trim();
+      const mismo = lista.find((n) => normalizarTexto(n) === normalizarTexto(nombre));
+      let detalle = '';
+      if (mismo && mismo !== nombre) { guardar.nombreComercial = mismo; detalle = `Tu nombre se escribirá «${mismo}».`; }
+      else if (nombre && !mismo) detalle = `«${nombre}» no está en la lista: después elige tu nombre en Más → Ajustes.`;
+      else if (!nombre) detalle = 'Después elige tu nombre en Más → Ajustes.';
+      cambios.push({ tipo: 'comerciales', texto: `Comerciales: ${lista.join(', ')}`, detalle, sinCambio: igual && !guardar.nombreComercial });
+    } else {
+      cambios.push({ tipo: 'comerciales', texto: 'Comerciales: la hoja está vacía', detalle: 'Se queda la lista de ahora.', sinCambio: true });
     }
   }
   const hayAlgo = cambios.some((c) => !c.sinCambio);

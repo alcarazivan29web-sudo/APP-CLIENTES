@@ -8,7 +8,7 @@ import { exportarClientesExcel, hacerCopiaSeguridad, exportarHistorial, exportar
 import { abrirPromos, flujoImportarOficina, abrirMensajes, estadoOficina, abrirResumen, abrirCambiosICG, contarCambiosICG } from './oficina.js';
 import { leerCopia } from '../migraciones.js';
 import {
-  fechaNormal, fechaDeMarca, horaDeMarca, marcaTiempo, PLANTILLA_NO_CONTESTA, rellenarPlantilla,
+  fechaNormal, fechaDeMarca, horaDeMarca, marcaTiempo, comprobarComercial, PLANTILLA_NO_CONTESTA, rellenarPlantilla,
   recordatoriosDelDia, recordatoriosProximos, fechaCorta, DIAS, diaSemana, capitalizarPrimera,
 } from '../logica.js';
 import * as acciones from '../acciones.js';
@@ -53,6 +53,7 @@ export function render(cont, ctx) {
       boton('Resumen semanal', () => abrirResumen(ctx), 'btn-principal'),
       boton(numCambios, () => abrirCambiosICG(ctx)),
       boton('Exportar para el CRM', async () => {
+        if (!await comercialParaExportar()) return;
         const exportado = marcaTiempo(ctx.reloj.ahora());
         try {
           const r = await exportarParaCRM({ fecha: ctx.reloj.ahoraFH().fecha, exportado });
@@ -116,6 +117,45 @@ function seccionRecordatorios(ctx) {
 //  Ajustes
 // ---------------------------------------------------------------------
 
+/** Desplegable con la lista cerrada de comerciales (la manda la oficina). */
+function selectorComercial(actual, lista) {
+  const fuera = actual && !lista.includes(actual);
+  const el = h('select', { class: 'campo' },
+    h('option', { value: '' }, '— Elige tu nombre —'),
+    lista.map((n) => h('option', { value: n, selected: n === actual }, n)),
+    fuera ? h('option', { value: actual, selected: true }, `${actual} (no está en la lista)`) : null);
+  return { el, grupo: h('label', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, 'Tu nombre'), el,
+    h('span', { class: 'texto-ayuda' }, 'La lista de comerciales la manda la oficina en su Excel. Sale en tus pedidos y en el Excel para el CRM.')) };
+}
+
+/** Lleva al campo «Tu nombre» de Ajustes. */
+function irANombre() {
+  const el = document.getElementById('ajuste-nombre');
+  if (!el) return;
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  setTimeout(() => el.focus(), 400);
+}
+
+/** Antes de exportar para el CRM: nombre elegido (y de la lista, si la hay) y confirmado. */
+async function comercialParaExportar() {
+  const aj = datos.obtenerAjustes();
+  const r = comprobarComercial(aj);
+  if (!r.ok) {
+    toast(r.motivo === 'vacio'
+      ? 'Antes de exportar, pon tu nombre en Ajustes (aquí abajo) y pulsa «Guardar ajustes».'
+      : r.sugerido
+        ? `En la lista de la oficina tu nombre es «${r.sugerido}». Elígelo en Ajustes (aquí abajo) y guarda.`
+        : `«${aj.nombreComercial}» no está en la lista de comerciales de la oficina. Elige tu nombre en Ajustes (aquí abajo) y guarda.`,
+    { duracion: 9000 });
+    irANombre();
+    return false;
+  }
+  const ok = await confirmar(`Vas a exportar como «${aj.nombreComercial}». ¿Es tu nombre? Exporta siempre desde el móvil en el que trabajas.`,
+    { ok: 'Sí, exportar', cancelar: 'No, cambiarlo', titulo: 'Exportar para el CRM' });
+  if (!ok) irANombre();
+  return ok;
+}
+
 function formAjustes(ctx, aj) {
   const campo = (etiqueta, valor, ayuda, extra = {}) => {
     const el = extra.multilinea
@@ -123,7 +163,10 @@ function formAjustes(ctx, aj) {
       : h('input', { class: 'campo', type: extra.tipo || 'text', value: valor || '', inputmode: extra.inputmode, placeholder: extra.placeholder });
     return { el, grupo: h('label', { class: 'campo-grupo' }, h('span', { class: 'etiqueta-campo' }, etiqueta), el, ayuda ? h('span', { class: 'texto-ayuda' }, ayuda) : null) };
   };
-  const nombre = campo('Tu nombre', aj.nombreComercial, 'Sale al final de los pedidos que mandas a la oficina.', { placeholder: 'Ej.: Juan Bonilla' });
+  const lista = (aj.comerciales || []).filter(Boolean);
+  const nombre = lista.length ? selectorComercial(aj.nombreComercial, lista) : campo('Tu nombre', aj.nombreComercial,
+    'Sale al final de los pedidos que mandas a la oficina y en el Excel para el CRM. Escríbelo siempre igual.', { placeholder: 'Ej.: Juan Bonilla' });
+  nombre.el.id = 'ajuste-nombre';
   const oficina = campo('WhatsApp de la oficina (pedidos)', aj.whatsappOficina, 'Si lo dejas vacío, se abrirá el menú de compartir para elegir a quién mandarlo.', { tipo: 'tel', inputmode: 'tel', placeholder: 'Ej.: 600 123 456' });
   const ivan = campo('WhatsApp o correo de Iván (resumen semanal)', aj.contactoIvan, null, { placeholder: 'Ej.: 600 123 456 o correo@ejemplo.com' });
   const plantilla = campo('Mensaje cuando no contesta', aj.plantillas.noContesta,
@@ -139,6 +182,7 @@ function formAjustes(ctx, aj) {
   };
   plantilla.el.addEventListener('input', actualizarVista);
   nombre.el.addEventListener('input', actualizarVista);
+  nombre.el.addEventListener('change', actualizarVista);
   actualizarVista();
 
   return h('div', {},
@@ -196,7 +240,7 @@ async function restaurar(ctx) {
   if (!ok) return;
   try {
     await datos.restaurarCopia(texto);
-    toast('Copia restaurada');
+    toast('Copia restaurada. A partir de ahora trabaja (y exporta para el CRM) solo desde este móvil; deja de usar la app en el antiguo.', { duracion: 10000 });
     ctx.refrescar();
   } catch (e) {
     toast('No se pudo restaurar: ' + e.message, { duracion: 7000 });
